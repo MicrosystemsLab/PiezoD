@@ -172,10 +172,11 @@ classdef cantilever_diffusion < cantilever
             x(7) = self.diffusion_temp;
         end
         
-        % The constraints in optimization_bounds and
-        % initial_conditions_random need to agree. There isn't a clear,
-        % clean way to do it and be able to override any values, but it
-        % would be nice.
+        % Set the minimum and maximum bounds for the cantilever state
+        % variables. Bounds are written in terms of the initialization
+        % variables. Secondary constraints (e.g. power dissipation,
+        % piezoresistor thickness rather than ratio, resonant frequency)
+        % are applied in optimization_constraints()
         function [lb ub] = optimization_bounds(self, constraints)
             min_l = 1e-6;
             max_l = 10e-3;
@@ -215,7 +216,9 @@ classdef cantilever_diffusion < cantilever
                 max_diffusion_time, max_diffusion_temp];
         end
         
-        function x0 = initial_conditions_random(self)
+        function x0 = initial_conditions_random(self, constraints)
+            [lb, ub] = self.optimization_bounds(constraints);
+            
             % Random generation bounds. We use the conditions from
             % optimization_bounds so that we don't randomly generate
             % something outside of the allowable bounds.
@@ -231,8 +234,8 @@ classdef cantilever_diffusion < cantilever
             l_pr_ratio_min = lb(4);
             l_pr_ratio_max = ub(4);
 
-            V_b_min = lb(5);
-            V_b_max = ub(5);
+            v_bridge_min = lb(5);
+            v_bridge_max = ub(5);
 
             diffusion_time_min = lb(6);
             diffusion_time_max = ub(6);
@@ -247,7 +250,7 @@ classdef cantilever_diffusion < cantilever
 
             l_pr_ratio = l_pr_ratio_min + rand*(l_pr_ratio_max - l_pr_ratio_min);
 
-            v_bridge = V_b_min + rand*(V_b_max - V_b_min);
+            v_bridge = v_bridge_min + rand*(v_bridge_max - v_bridge_min);
 
             diffusion_time = diffusion_time_min + rand*(diffusion_time_max - diffusion_time_min);
             diffusion_temp = diffusion_temp_min + rand*(diffusion_temp_max - diffusion_temp_max);

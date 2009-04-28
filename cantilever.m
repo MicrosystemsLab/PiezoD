@@ -706,7 +706,7 @@ classdef cantilever
 
             problem.options.MaxFunEvals = 10000;
             problem.options.MaxIter = 1000;
-            problem.options.Display = 'final';
+            problem.options.Display = 'iter';
 
             problem.options.Algorithm = 'Interior-point';
             problem.solver = 'fmincon';
@@ -716,65 +716,5 @@ classdef cantilever
             x = fmincon(problem);
             optimized_cantilever = self.cantilever_from_state(x);
         end
-        
-        function optimized_cantilever = optimize_fixed_t_l_pr_ratio(self, max_power, omega_min_hz, fluid_type, min_thickness, fixed_t_pr_ratio, fixed_l_pr_ratio, min_dimensions, max_voltage, max_doping)
-            % Total cantilever width = 2*min_dimensions
-            
-            scaling = [1e6 1e6 1e9 1 1 1 1 1 1e-18];
-            
-            problem.objective = @self.optimize_force_resolution;
-            
-            max_thickness = 10e-3;
-            
-            max_dimensions = 10e-3;
-            
-            min_pr_ratio = 0.01;
-            max_pr_ratio = 1.00;
-            min_pr_width_ratio = 0.01;
-            max_pr_width_ratio = 0.5;
-            
-            min_voltage = 0.01;
-            
-            min_doping = 1e15;
-            
-            % Note that the min cantilever width (two legs) is the
-            % min_dimension*2 because each leg is the minimum litho width
-            problem.x0 = scaling .* [self.l, self.w, self.t, self.l_pr_ratio, self.w_pr_ratio, self.w_gap_ratio, self.t_pr_ratio, self.v_bridge, self.doping];
-            problem.lb = scaling .* [min_dimensions min_dimensions*2 min_thickness fixed_l_pr_ratio min_pr_width_ratio min_pr_ratio fixed_t_pr_ratio min_voltage min_doping];
-            problem.ub = scaling .* [max_dimensions max_dimensions max_thickness fixed_l_pr_ratio max_pr_width_ratio max_pr_ratio fixed_t_pr_ratio max_voltage max_doping];
-
-            problem.options.TolFun = 1e-15;
-            problem.options.TolCon = 1e-15;
-            problem.options.TolX = 1e-15;
-
-            problem.options.MaxFunEvals = 10000;
-            problem.options.MaxIter = 1000;
-            problem.options.Display = 'final';
-
-            problem.options.Algorithm = 'Interior-point';
-            problem.solver = 'fmincon';
-
-            problem.nonlcon = @(x) self.optimization_constraintsraints(x, omega_min_hz, max_power, fluid_type);
-
-            x = fmincon(problem);
-            x = x ./ scaling;
-
-            % Update the object values to the optimal ones
-            l = x(1);
-            w = x(2);
-            t = x(3);
-
-            l_pr_ratio = x(4);
-            w_pr_ratio = x(5);
-            w_gap_ratio = x(6);
-            t_pr_ratio = x(7);
-
-            v_bridge = x(8);
-            doping = x(9);
-
-            optimized_cantilever = cantilever(self.freq_min, self.freq_max, l, w, t, l_pr_ratio, w_pr_ratio, w_gap_ratio, t_pr_ratio, v_bridge, doping);
-        end
-        
-
     end
 end
