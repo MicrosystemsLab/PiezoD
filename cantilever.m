@@ -75,7 +75,7 @@ classdef cantilever
     
         l_pr_ratio; % piezoresistor length ratio
 
-        v_bias; % Volts
+        v_bridge; % Volts
 
         rho_cantilever = 2330;
         rho_fluid = 1e3;
@@ -105,7 +105,7 @@ classdef cantilever
     methods    
             
         function self = cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, ...
-                v_bias, doping_type)
+                v_bridge, doping_type)
 
             self.freq_min = freq_min;
             self.freq_max = freq_max;
@@ -116,7 +116,7 @@ classdef cantilever
 
             self.l_pr_ratio = l_pr_ratio;
 
-            self.v_bias = v_bias;
+            self.v_bridge = v_bridge;
 
             self.freq_max = freq_max;
             self.freq_min = freq_min;
@@ -141,7 +141,7 @@ classdef cantilever
         function print_performance(self)
             fprintf('Cantilever L/W/T: %f %f %f \n', self.l*1e6, self.w*1e6, self.t*1e6)
             fprintf('PR Length Ratio: %g \n', self.l_pr_ratio)
-            fprintf('Bias voltage: %f \n', self.v_bias)
+            fprintf('Wheatstone Bridge Biase voltage: %f \n', self.v_bridge)
             fprintf('\n')
             fprintf('Resistance: %f \n', self.resistance())
             fprintf('Power dissipation (mW): %g \n', self.power_dissipation()*1e3)
@@ -168,7 +168,7 @@ classdef cantilever
         function print_performance_for_excel(self)
             variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
                 self.l_pr()*1e6, self.l_pr_ratio, ...
-                self.v_bias, self.freq_min, self.freq_max, ...
+                self.v_bridge, self.freq_min, self.freq_max, ...
                 self.force_resolution(), self.displacement_resolution(), ...
                 self.omega_vacuum_hz(), self.omega_damped_hz(), ...
                 self.stiffness(), self.quality_factor(), self.force_sensitivity(), self.beta(), ...
@@ -273,55 +273,61 @@ classdef cantilever
             number_of_carriers = Nz*self.resistor_length()*self.w_pr();
         end
 
-        % 1/f noise density
+        % 1/f noise density from the entire Wheatstone bridge
+        % Assuming two piezoresistors (with 1/f noise) and two w/o 1/f
+        % noise, so the 1/f noise density is sqrt(2) larger
         % Units: V
         function hooge_noise_density = hooge_noise_density(self)
-            hooge_noise_density = sqrt(self.alpha*self.v_bias ^ 2/self.number_of_carriers());
+            hooge_noise_density = sqrt(2)/4*sqrt(self.alpha*self.v_bridge^2/self.number_of_carriers());
         end
 
-        % Integrated 1/f noise density
+        % Integrated 1/f noise density for the entire Wheatstone bridge
         % Unit: V
         function integrated_hooge_noise = integrated_hooge_noise(self)
             integrated_hooge_noise = self.hooge_noise_density() * sqrt(log(self.freq_max / self.freq_min));
         end
 
-        % Johnson noise density
+        % Johnson noise density from the entire Wheatstone bridge
+        % Assuming four resistors each equal to R, so the Johnson noise
+        % density is the same as for a single resistor R
         % Units: V/rtHz
         function johnson_noise_density = johnson_noise_density(self)
             johnson_noise_density = sqrt(4 * self.k_b * self.T * self.resistance());
         end
         
-        % Integrated Johnson noise
+        % Integrated Johnson noise from the entire Wheatstone bridge
         % Unit: V
         function integrated_johnson_noise = integrated_johnson_noise(self)
             integrated_johnson_noise = self.johnson_noise_density()*sqrt(self.freq_max - self.freq_min);
         end
 
-
         % Assume INA103 type performance
         function integrated_amplifier_noise = integrated_amplifier_noise(self)
-            integrated_amplifier_noise = 1e-9 * sqrt(self.freq_max - self.freq_min) + 20e-9*log(self.freq_max/self.freq_min);
+            integrated_amplifier_noise = (1.8e-9 * sqrt(self.freq_max - self.freq_min))^2 + (10e-9*sqrt(log(self.freq_max/self.freq_min)))^2;
         end
         
         % Calculate the knee frequency
-        % Equating 1/f noise and johnson... sqrt(alpha*V_b^2/(N*f)) = sqrt(4*k*R*T)
-        % Leads to f_knee = alpha*V_b^2/(N*V_j^2)
+        % Equating 1/f noise and johnson... sqrt(2*alpha*V_b^2/(N*f_knee)) = S_j
+        % Leads to f_knee = 2*alpha*V_b^2/(N*S_j^2)
         function knee_frequency = knee_frequency(self)
-            knee_frequency = self.alpha*self.v_bias^2/(self.number_of_carriers()*self.johnson_noise_density()^2);
+            v_bias = self.v_bridge/2;
+            knee_frequency = 2*self.alpha*v_bias^2/(self.number_of_carriers()*self.johnson_noise_density()^2);
         end
 
         % Integrated cantilever noise for given bandwidth
         % Source are uncorrelated so they add in RMS
         % Units: V = sqrt(V^2 + V^2 + ..)
         function integrated_noise = integrated_noise(self)
+            % The amplifier noise was already squared above in order to
+            % correctly not generate the cross-term
             integrated_noise = sqrt(self.integrated_johnson_noise()^2 + ...
                 self.integrated_hooge_noise()^2 + ...
-                self.integrated_amplifier_noise()^2);
+                self.integrated_amplifier_noise());
         end
 
         % Calculate the noise in V/rtHz at a given frequency
         function voltage_noise = voltage_noise(self, frequency)
-            hooge_noise = self.hooge_noise_density()./frequency; % V/rtHz
+            hooge_noise = self.hooge_noise_density()./sqrt(frequency); % V/rtHz
             johnson_noise = self.johnson_noise_density(); % V/rtHz
             voltage_noise = sqrt(hooge_noise.^2 + johnson_noise^2 );
         end
@@ -379,14 +385,15 @@ classdef cantilever
         end
 
         % Ratio of piezoresistor resistance to total resistance (< 1)
-        % Currently unused
+        % Assume 1 for now
         function gamma = gamma(self)
             gamma = 1;
         end
 
         % Units: V/N
         function force_sensitivity = force_sensitivity(self)
-            force_sensitivity = 3*(self.l - self.l_pr()/2)*self.max_piezoresistance_factor()/(2*self.w*self.t^2)*self.beta()*self.gamma()*self.v_bias;
+            v_bias = self.v_bridge/2;
+            force_sensitivity = 3*(self.l - self.l_pr()/2)*self.max_piezoresistance_factor()/(2*self.w*self.t^2)*self.beta()*self.gamma()*v_bias;
         end
 
 
@@ -395,11 +402,11 @@ classdef cantilever
         % ==================================
 
 
-        % Power dissipation (W)
+        % Power dissipation (W) in the cantilever
         function power_dissipation = power_dissipation(self)
-            power_dissipation = self.v_bias^2 / self.resistance();
+            v_bias = self.v_bridge/2;
+            power_dissipation = v_bias^2 / self.resistance();
         end
-
 
         % ==================================
         % ====== Calculate resolution ======
@@ -732,7 +739,7 @@ classdef cantilever
             
             % Note that the min cantilever width (two legs) is the
             % min_dimension*2 because each leg is the minimum litho width
-            problem.x0 = scaling .* [self.l, self.w, self.t, self.l_pr_ratio, self.w_pr_ratio, self.w_gap_ratio, self.t_pr_ratio, self.v_bias, self.doping];
+            problem.x0 = scaling .* [self.l, self.w, self.t, self.l_pr_ratio, self.w_pr_ratio, self.w_gap_ratio, self.t_pr_ratio, self.v_bridge, self.doping];
             problem.lb = scaling .* [min_dimensions min_dimensions*2 min_thickness fixed_l_pr_ratio min_pr_width_ratio min_pr_ratio fixed_t_pr_ratio min_voltage min_doping];
             problem.ub = scaling .* [max_dimensions max_dimensions max_thickness fixed_l_pr_ratio max_pr_width_ratio max_pr_ratio fixed_t_pr_ratio max_voltage max_doping];
 
@@ -762,10 +769,10 @@ classdef cantilever
             w_gap_ratio = x(6);
             t_pr_ratio = x(7);
 
-            v_bias = x(8);
+            v_bridge = x(8);
             doping = x(9);
 
-            optimized_cantilever = cantilever(self.freq_min, self.freq_max, l, w, t, l_pr_ratio, w_pr_ratio, w_gap_ratio, t_pr_ratio, v_bias, doping);
+            optimized_cantilever = cantilever(self.freq_min, self.freq_max, l, w, t, l_pr_ratio, w_pr_ratio, w_gap_ratio, t_pr_ratio, v_bridge, doping);
         end
         
 

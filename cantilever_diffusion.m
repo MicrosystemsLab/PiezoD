@@ -7,11 +7,11 @@ classdef cantilever_diffusion < cantilever
     methods
         % Call superclass constructor
         function self = cantilever_diffusion(freq_min, freq_max, ...
-                l, w, t, l_pr_ratio, v_bias, doping_type, ...
+                l, w, t, l_pr_ratio, v_bridge, doping_type, ...
                 diffusion_time, diffusion_temp)
 
             self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, ...
-                v_bias, doping_type);
+                v_bridge, doping_type);
                 
             self.diffusion_time = diffusion_time;
             self.diffusion_temp = diffusion_temp;
@@ -28,7 +28,7 @@ classdef cantilever_diffusion < cantilever
         function print_performance_for_excel(self)
             fprintf('%s \t', self.doping_type);
             variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
-                self.l_pr_ratio, self.v_bias ...
+                self.l_pr_ratio, self.v_bridge ...
                 self.diffusion_time, self.diffusion_temp, ...
                 self.freq_min, self.freq_max, ...
                 self.force_resolution(), self.displacement_resolution(), ...
@@ -128,7 +128,7 @@ classdef cantilever_diffusion < cantilever
             w_scale = 1e6;
             t_scale = 1e9;
             l_pr_ratio_scale = 1;
-            v_bias_scale = 1;
+            v_bridge_scale = 1;
             diffusion_time_scale = 1e-3;
             diffusion_temp_scale = 1e-3;
             
@@ -136,7 +136,7 @@ classdef cantilever_diffusion < cantilever
                        w_scale ...
                        t_scale ...
                        l_pr_ratio_scale ...
-                       v_bias_scale ...
+                       v_bridge_scale ...
                        diffusion_time_scale ...
                        diffusion_temp_scale];
         end
@@ -151,13 +151,13 @@ classdef cantilever_diffusion < cantilever
 
             l_pr_ratio = x0(4);
             
-            v_bias = x0(5);
+            v_bridge = x0(5);
             
             diffusion_time = x0(6);
             diffusion_temp = x0(7);
             
             new_cantilever = cantilever_diffusion(self.freq_min, self.freq_max, ...
-                l, w, t, l_pr_ratio, v_bias, self.doping_type, ...
+                l, w, t, l_pr_ratio, v_bridge, self.doping_type, ...
                 diffusion_time, diffusion_temp);
         end
         
@@ -167,7 +167,7 @@ classdef cantilever_diffusion < cantilever
             x(2) = self.w;
             x(3) = self.t;
             x(4) = self.l_pr_ratio;
-            x(5) = self.v_bias;
+            x(5) = self.v_bridge;
             x(6) = self.diffusion_time;
             x(7) = self.diffusion_temp;
         end
@@ -189,8 +189,8 @@ classdef cantilever_diffusion < cantilever
             min_l_pr_ratio = 0.01;
             max_l_pr_ratio = 1;
             
-            min_v_bias = 0.1;
-            max_v_bias = 5;
+            min_v_bridge = 0.1;
+            max_v_bridge = 5;
             
             min_diffusion_time = 10*60; % seconds
             max_diffusion_time = 15*60;
@@ -200,7 +200,7 @@ classdef cantilever_diffusion < cantilever
             
             % Override the default values if any were provided
             % constraints is a set of key value pairs, e.g.
-            % constraints = {{'min_l', 'max_v_bias'}, {5e-6, 10}}
+            % constraints = {{'min_l', 'max_v_bridge'}, {5e-6, 10}}
             if length(constraints) > 0
                 keys = constraints{1};
                 values = constraints{2};
@@ -209,9 +209,9 @@ classdef cantilever_diffusion < cantilever
                 end
             end
             
-            lb = [min_l, min_w, min_t, min_l_pr_ratio, min_v_bias, ...
+            lb = [min_l, min_w, min_t, min_l_pr_ratio, min_v_bridge, ...
                 min_diffusion_time, min_diffusion_temp];
-            ub = [max_l, max_w, max_t, max_l_pr_ratio, max_v_bias, ...
+            ub = [max_l, max_w, max_t, max_l_pr_ratio, max_v_bridge, ...
                 max_diffusion_time, max_diffusion_temp];
         end
         
@@ -247,12 +247,12 @@ classdef cantilever_diffusion < cantilever
 
             l_pr_ratio = l_pr_ratio_min + rand*(l_pr_ratio_max - l_pr_ratio_min);
 
-            v_bias = V_b_min + rand*(V_b_max - V_b_min);
+            v_bridge = V_b_min + rand*(V_b_max - V_b_min);
 
             diffusion_time = diffusion_time_min + rand*(diffusion_time_max - diffusion_time_min);
             diffusion_temp = diffusion_temp_min + rand*(diffusion_temp_max - diffusion_temp_max);
 
-            x0 = [l, w, t, l_pr_ratio, v_bias, diffusion_time, diffusion_temp];
+            x0 = [l, w, t, l_pr_ratio, v_bridge, diffusion_time, diffusion_temp];
         end     
     end
 end
