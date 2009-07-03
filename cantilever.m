@@ -157,6 +157,14 @@ classdef cantilever
             fprintf('Knee frequency (Hz): %g \n', self.knee_frequency())
             fprintf('Johnson/Hooge: %g \n', self.integrated_johnson_noise()/self.integrated_hooge_noise())
             fprintf('\n')
+            fprintf('Sheet Resistance: %g \n', self.sheet_resistance())
+            
+            [x, doping] = self.doping_profile();
+            Nz = trapz(x, doping*1e6);
+            fprintf('Nz: %g \n', Nz)
+            
+            fprintf('\n')
+            fprintf('Number of Carriers: %g \n', self.number_of_carriers());
             fprintf('Stiffness (N/m): %g \n', self.stiffness())
             fprintf('Damped freq: %f \n', self.omega_damped_hz())
             fprintf('Quality factor: %f \n', self.quality_factor())
@@ -185,11 +193,12 @@ classdef cantilever
         % ===== Calculate resistance =======
         % ==================================
 
-        % Calculate total resistance of piezoresistor
+        % Calculate total resistance of piezoresistor. Includes effect of
+        % other resistances (gamma)
         % Units: ohms
         function resistance = resistance(self)
             number_of_squares = self.resistor_length()/self.w_pr();            
-            resistance = number_of_squares * self.sheet_resistance();
+            resistance = number_of_squares * self.sheet_resistance() / self.gamma();
         end
 
         % Calculate resistor length, used to calculat resistance
@@ -278,7 +287,7 @@ classdef cantilever
         % noise, so the 1/f noise density is sqrt(2) larger
         % Units: V
         function hooge_noise_density = hooge_noise_density(self)
-            hooge_noise_density = sqrt(2)/4*sqrt(self.alpha*self.v_bridge^2/self.number_of_carriers());
+            hooge_noise_density = sqrt(2)/2*sqrt(self.alpha*self.v_bridge^2/self.number_of_carriers());
         end
 
         % Integrated 1/f noise density for the entire Wheatstone bridge
@@ -307,11 +316,10 @@ classdef cantilever
         end
         
         % Calculate the knee frequency
-        % Equating 1/f noise and johnson... sqrt(2*alpha*V_b^2/(N*f_knee)) = S_j
-        % Leads to f_knee = 2*alpha*V_b^2/(N*S_j^2)
+        % Equating 1/f noise and johnson... sqrt(alpha*V_bridge^2/(2*N*f_knee)) = sqrt(4*kb*T*R)
+        % Leads to f_knee = alpha*V_bridge^2/(2*N*S_j^2)
         function knee_frequency = knee_frequency(self)
-            v_bias = self.v_bridge/2;
-            knee_frequency = 2*self.alpha*v_bias^2/(self.number_of_carriers()*self.johnson_noise_density()^2);
+            knee_frequency = self.alpha*self.v_bridge^2/(2*self.number_of_carriers()*self.johnson_noise_density()^2);
         end
 
         % Integrated cantilever noise for given bandwidth
@@ -387,7 +395,7 @@ classdef cantilever
         % Ratio of piezoresistor resistance to total resistance (< 1)
         % Assume 1 for now
         function gamma = gamma(self)
-            gamma = 1;
+            gamma = 0.5;
         end
 
         % Units: V/N
@@ -404,8 +412,7 @@ classdef cantilever
 
         % Power dissipation (W) in the cantilever
         function power_dissipation = power_dissipation(self)
-            v_bias = self.v_bridge/2;
-            power_dissipation = v_bias^2 / self.resistance();
+            power_dissipation = self.v_bridge^2 / (4*self.resistance());
         end
 
         % ==================================
@@ -630,6 +637,7 @@ classdef cantilever
             C(3) = -c_new.force_resolution(); % require that force_resolution is positive
             
             % Misc constraints
+            C(4) = 100 - c_new.stiffness(); % stiffness at least 42 N/m
 %             C(3) = 5*c_new.w - c_new.l; % length should be at least 5x the width
 %             C(4) = 3e-6 - c_new.w*c_new.w_gap_ratio; % Air gap needs to be at least 3 microns wide
 %             C(5) = 2*c_new.t - c_new.w; % width should be at least 2x the thickness
@@ -704,7 +712,7 @@ classdef cantilever
             problem.options.TolCon = 1e-12;
             problem.options.TolX = 1e-12;
 
-            problem.options.MaxFunEvals = 10000;
+            problem.options.MaxFunEvals = 5000;
             problem.options.MaxIter = 1000;
             problem.options.Display = 'iter';
 

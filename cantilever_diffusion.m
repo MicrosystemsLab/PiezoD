@@ -82,6 +82,10 @@ classdef cantilever_diffusion < cantilever
                     x = linspace(0, junction_depth, n_points);
 
                     doping = N_surface*erfc(x/(2*diffusion_length));
+                    
+                % A model for phosphorus diffusion which accounts for the
+                % kink. Takes the solid solubility to be 2.1e20/cc, which
+                % is accurate for ~850C diffusion temp.
                 case 'phosphorus'
                     k_b_eV = 8.617343e-5;
                     x = linspace(0, self.t*1e2, n_points); % m -> cm
@@ -115,7 +119,7 @@ classdef cantilever_diffusion < cantilever
         
         function x_j = junction_depth(self)
             [x, doping] = self.doping_profile();
-            x_j = max(x);
+            x_j = x(find(doping == 1e15, 1));
         end   
         
         % ==================================
@@ -193,8 +197,8 @@ classdef cantilever_diffusion < cantilever
             min_v_bridge = 0.1;
             max_v_bridge = 5;
             
-            min_diffusion_time = 10*60; % seconds
-            max_diffusion_time = 15*60;
+            min_diffusion_time = 5*60; % seconds
+            max_diffusion_time = 60*60;
             
             min_diffusion_temp = 273+800; % K
             max_diffusion_temp = 273+900;

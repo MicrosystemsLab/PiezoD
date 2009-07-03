@@ -2,8 +2,8 @@ clear all
 
 % Constraints
 freq_min = 1e0;
-freq_max = 100e3;
-omega_min_hz = 2*freq_max;
+freq_max = 1e3;
+omega_min_hz = 5*freq_max;
 fluid_type = 'vacuum';
 max_power = 2e-3;
 
@@ -19,13 +19,12 @@ l_pr_ratio = 0.5;
 v_bridge = 2;
 doping_type = 'phosphorus';
 concentration_initial = 1e18;
-t_pr_ratio = 0.1;
+t_pr_ratio = 0.33;
 
 % Create the cantilever and print the initial performance
 c_epitaxy = cantilever_epitaxy(freq_min, freq_max, ...
     l, w, t, l_pr_ratio, v_bridge, doping_type, concentration_initial, ...
     t_pr_ratio);
-
 c_epitaxy.print_performance();
 
 % Optimize the cantilever: use three initial random starting conditions
