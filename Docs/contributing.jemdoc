@@ -1,14 +1,17 @@
 # jemdoc: menu{MENU}{contributing.html}
 = piezoD - contributing
 
-
-piezoD uses git for version control. You can access it here. *The code will be moving to a better host (e.g. GitHub or Google Code) once the paper is accepted*
+piezoD uses git for version control. The repository is hosted on GitHub and can be accessed here.
 
 ~~~
 {}{}
-http://microsystems.stanford.edu/git/PRopt.git
+http://github.com/jcdoll/PiezoD
 ~~~
 
-piezoD was originally developed for [http://www.scipy.org SciPy], but the optimization never seemed to work. Help is welcome on that front.
+Contributions are strongly encouraged. Please report any issues or requests on GitHub. This documentation is also hosted in the GitHub repository, and you are welcome to help in improving it.
 
-Instructions on how to commit and an overview of the code is forthcoming once the paper gets finalized.
+Here are a few possible features to add:
+- Python implemtation. Development originally started in [http://www.scipy.org SciPy] but I was never able to get the optimization working.
+- Metal strain gauges. Right now the code is oriented towards silicon piezoresistors.
+- TSuprem integration for ion implantation optimization.
+- Comsol integration for finite element analysis of more complex structures.

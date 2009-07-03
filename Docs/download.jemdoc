@@ -3,8 +3,8 @@
 
 piezoD is composed of several Matlab classes. Here are some recent builds:
 
-- [./v0.2.0.tar.gz v0.2.0] - Rewrote constraint handling, other important things
-- [./v0.1.0.tar.gz v0.1.0] - Initial release
+- [./v0.2.0.tar.gz v0.2.0 - 04/28/09] - Rewrote constraint handling, other important things
+- [./v0.1.0.tar.gz v0.1.0 - 03/01/09] - Initial release
 
 Detailed changes can be found at the [http://microsystems.stanford.edu/git/?p=PRopt.git git] page.
 
