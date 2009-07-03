@@ -1,0 +1,9 @@
+To push:
+git push github
+
+where your .git/config file has a github remote entry set up
+
+[remote "github"]
+        url = git@github.com:username/myproject.git
+        fetch = +refs/heads/*:refs/remotes/github/*
+        push = refs/heads/*:refs/heads/*
