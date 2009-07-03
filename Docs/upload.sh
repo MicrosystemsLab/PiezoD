@@ -1,0 +1,1 @@
+scp -r html/* jcdoll@microsystems.stanford.edu:/Library/WebServer/microsystems/piezoD/

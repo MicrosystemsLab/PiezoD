@@ -1,0 +1,1 @@
+jemdoc -c piezoD.conf -o html/ *.jemdoc

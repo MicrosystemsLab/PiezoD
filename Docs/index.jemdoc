@@ -1,0 +1,25 @@
+# jemdoc: menu{MENU}{index.html}
+= piezoD - piezoresistive cantilever design optimization
+
+piezoD is a tool for optimizing the performance of piezoresistive cantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design piezoresistive cantilevers.
+
+= features
+
+- materials
+ -- p-type and n-type single crystal silicon cantilevers
+- performance model
+ -- noise: 1/f, johnson, amplifier
+ -- doping methods: epitaxy, diffusion
+- constraints available
+ -- cantilever design: dimensions, bias voltage, doping time/temperature/concentration
+ -- computed: power dissipation, resonant frequency (vacuum or fluid), resistance
+- optimization targets
+ -- force sensing in a given frequency range (broadband)
+
+= license
+
+Copyright\C 2009 Joey Doll and Stanford Microsystems Lab
+
+piezoD is free software; you can redistribute it and/or modify it under the terms of the [http://www.gnu.org/licenses/gpl-3.0.html GNU General Public License] as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version.
+
+piezoD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [http://www.gnu.org/licenses/gpl-3.0.html GNU General Public License] for more details.

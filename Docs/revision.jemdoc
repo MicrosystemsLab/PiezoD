@@ -1,0 +1,43 @@
+# jemdoc: menu{MENU}{revision.html}
+= piezoD - revision history
+
+piezoD is under active development.
+
+= Revisions
+
+== Version 0.2.0
+
+- Rewrote all bias voltages in terms of the Wheatstone bridge bias
+(previously power and 1/f used resistor bias while sensitivity used
+bridge bias)
+
+- Rewrote the noise in terms of the Wheatstone bridge output
+noise. Johnson noise was correct, 1/f noise was off by a factor of
+sqrt(2).
+
+- Rewrote the way in which constraints are handled; previously there
+was a general optimization function where you could set every
+constraint individually and then a large number of helper functions
+callable by the user (e.g. one function to set the min thickness, and
+another function for when you wanted to set the min thickness and max
+voltage). Now, constrains are handled by a key/value cell array
+(i.e. a dictionary) so that you can arbitrarily set constraints and
+just pass them into the main optimization function as a single
+argument.
+
+- Added a script (sample_code.m) which shows how to use the code. This
+needs more work and is part of a larger effort to make the code more
+user friendly and reduce barriers to usage.
+
+
+== Version 0.1.0
+
+- First public release
+
+- Handles n-type and p-type silicon piezoresistors
+
+- Optimization for broadband force sensing
+
+- Epitaxy and diffusion doping
+
+- Flexible constraint and bounds

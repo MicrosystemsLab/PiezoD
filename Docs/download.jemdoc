@@ -1,0 +1,15 @@
+# jemdoc: menu{MENU}{download.html}
+= piezoD - download
+
+piezoD is composed of several Matlab classes. Here are some recent builds:
+
+- [./v0.2.0.tar.gz v0.2.0] - Rewrote constraint handling, other important things
+- [./v0.1.0.tar.gz v0.1.0] - Initial release
+
+Detailed changes can be found at the [http://microsystems.stanford.edu/git/?p=PRopt.git git] page.
+
+piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used.
+
+Installation is just a matter of sticking *cantilever.m*, *cantilever_diffusion.m* and *cantilever_epitaxy.m* in your Matlab path. You can check that it works by running *sample_code.m*.
+
+*Important:* if piezoD seems to be running slowly, try running /clear/ twice before running it again. The origins of this bug are unclear.

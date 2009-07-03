@@ -1,0 +1,14 @@
+# jemdoc: menu{MENU}{contributing.html}
+= piezoD - contributing
+
+
+piezoD uses git for version control. You can access it here. *The code will be moving to a better host (e.g. GitHub or Google Code) once the paper is accepted*
+
+~~~
+{}{}
+http://microsystems.stanford.edu/git/PRopt.git
+~~~
+
+piezoD was originally developed for [http://www.scipy.org SciPy], but the optimization never seemed to work. Help is welcome on that front.
+
+Instructions on how to commit and an overview of the code is forthcoming once the paper gets finalized.
