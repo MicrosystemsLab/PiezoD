@@ -3,10 +3,11 @@
 
 piezoD is composed of several Matlab classes. Here are some recent builds:
 
+- [./v0.2.1.zip v0.2.1 - 07/24/09] - Fixed several bugs in the diffusion piezoresistor code and typos in sample_code.m
 - [./v0.2.0.tar.gz v0.2.0 - 04/28/09] - Rewrote constraint handling, other important things
 - [./v0.1.0.tar.gz v0.1.0 - 03/01/09] - Initial release
 
-Detailed changes can be found at the [http://microsystems.stanford.edu/git/?p=PRopt.git git] page.
+The versions posted here will lag behind the actual code development. The most recent code and detailed changes can be found at the [http://github.com/jcdoll/PiezoD/commits/master/ github] page.
 
 piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used.
 

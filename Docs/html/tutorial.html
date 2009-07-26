@@ -1,0 +1,160 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+<meta name="generator" content="jemdoc, see http://jemdoc.jaboc.net/" />
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<link rel="stylesheet" href="jemdoc.css" type="text/css" />
+<title>piezoD - tutorial</title>
+</head>
+<body>
+<table summary="Table for page layout." id="tlayout">
+<tr valign="top">
+<td id="layout-menu">
+<div class="menu-category">piezoD</div>
+<div class="menu-item"><a href="index.html">home</a></div>
+<div class="menu-item"><a href="download.html">download</a></div>
+<div class="menu-item"><a href="contributing.html">contributing</a></div>
+<div class="menu-item"><a href="revision.html">revision&nbsp;history</a></div>
+<div class="menu-item"><a href="contact.html">contact</a></div>
+<div class="menu-category">user guide</div>
+<div class="menu-item"><a href="examples.html">examples</a></div>
+</td>
+<td id="layout-content">
+<div id="toptitle">
+<h1>piezoD - tutorial</h1>
+</div>
+<p>Let&rsquo;s work through an example of using piezoD to calculation the properties of an example single crystal silicon cantilever beam. Type the code below into Matlab as we go.</p>
+<p>First, start up Matlab and <a href="./download.html">download</a> the code. Either place the code in your Matlab path or open &rsquo;&rsquo;&rsquo;sample_code.m&rsquo;&rsquo;&rsquo; and press run, which will automatically move Matlab to the directory where the code is.</p>
+<p>Now we can get started. First, let&rsquo;s clear out any existing variables.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+clear
+clear
+</pre></div></div>
+<p>It&rsquo;s important to run clear twice. Otherwise the optimization code (which we&rsquo;ll get to later) might run slowly. The cause is unclear and it only happens occasionally, but we&rsquo;ll play it safe.</p>
+<p>Then let&rsquo;s define the length, width and thickness of the cantilever beam.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+l = 100e-6;
+w = 4e-6;
+t = 1e-6;
+</pre></div></div>
+<p>All dimensions are in MKS, so we have defined a 100 micron long x 4 micron wide x 1 micron thick cantilever. Next let&rsquo;s define the electrical details of the piezoresistor.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+l_pr_ratio = 0.8;
+t_pr_ratio = 0.5;
+
+doping_type = 'phosphorus';
+dopant_concentration = 1e18;
+
+v_bridge = 2;
+</pre></div></div>
+<p>We have defined the piezoresistor to extend 80% of the cantilever beam length, and to be 50% of the beam thickness (500 nm). We then define the piezoresistor to be n-type (phosphorus). This implicitly defines the cantilever to be oriented in the &lt;100&gt; orientation, where the piezoresistive coefficient is a maximum. The code automatically uses an elastic modulus of 130 GPa for this orientation.</p>
+<p>If we had chosen &rsquo;boron&rsquo; instead, the cantilever would face the &lt;110&gt; direction (E = 169 GPa) and the piezoresistive coefficients would be modified accordingly as well.</p>
+<p>We&rsquo;re going to make an epitaxially doped piezoresistor, which will have a constant dopant concentration of 1e18 per cc in the piezoresistor.</p>
+<p>Finally, the code assumes that the piezoresistor is being measured with a Wheatstone bridge and we are applying a bias voltage of 2 V across the entire bridge (1 V across the piezoresistor).</p>
+<p>We just need to define one last parameter, which is the frequency range that we are measuring. This is used for calculating the force or displacement resolution of the cantilever.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+freq_min = 1;
+freq_max = 1000;
+</pre></div></div>
+<p>The frequencies are in units of Hertz, so we&rsquo;re going to calculate the resolution from 1 Hz to 1 kHz.</p>
+<p>This is enough to construct a cantilever, which we can do with this code.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy = cantilever_epitaxy(freq_min, freq_max, ...
+    l, w, t, l_pr_ratio, v_bridge, doping_type, dopant_concentration, ...
+    t_pr_ratio);
+</pre></div></div>
+<p>We have created a cantilever_epitaxy object using the variables defined up until now. We can examine the object we just created by typing in the variable name.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy
+</pre></div></div>
+<p>You should see the parameters that you defined as well as a few other ones like Boltzmann&rsquo;s constant and the charge of an electron, which are used for calculating things like the Johnson noise of the resistor.</p>
+<p>The cantilever object that we created has a number of internal methods which can be called to calculate various properties or optimize its design. You can see an entire list with this.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+methods('cantilever_epitaxy')
+</pre></div></div>
+<p>Let&rsquo;s calculate a few mechanical properties.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy.stiffness()
+c_epitaxy.omega_vacuum_hz()
+c_epitaxy.omega_damped_hz()
+</pre></div></div>
+<p>We just calculated the stiffness, resonant frequency in vacuum (in units of Hz) and resonant frequency in water (also in Hz) for the cantilever. The method names are meant to be self-explanatory for the most part.</p>
+<p>Now how about some electrical properties.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy.number_of_carriers()
+c_epitaxy.sheet_resistance()
+c_epitaxy.resistance()
+
+c_epitaxy.integrated_amplifier_noise()
+c_epitaxy.integrated_hooge_noise()
+c_epitaxy.integrated_johnson_noise()
+c_epitaxy.integrated_noise()
+c_epitaxy.johnson_noise_density()
+
+c_epitaxy.plot_noise_spectrum()
+</pre></div></div>
+<p>Finally, let&rsquo;s calculate the force sensitivity (in units of V/N), piezoresistor efficiency factor, force resolution and displacement resolution.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy.force_sensitivity()
+c_epitaxy.beta()
+c_epitaxy.force_resolution()
+c_epitaxy.displacement_resolution()
+</pre></div></div>
+<p>We can also print a summary of the performance, either nicely formatted or tab delimited for copying and pasting into a spreadsheet.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy.print_performance()
+c_epitaxy.print_performance_for_excel()
+</pre></div></div>
+<p>The cantilever already has decent performance, but we could do much better by optimizing the cantilever design. In order to optimize the design we need to provide a few constraints on the design variable limitations.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+omega_min_hz = 5*freq_max;
+fluid_type = 'vacuum';
+max_power = 2e-3;
+
+constraints = {{'min_t', 'min_w', 'max_v_bridge'}, {1e-6, 4e-6, 10}};
+</pre></div></div>
+<p>We tell the optimizer that the resonant frequency must be at least 5x greater than our maximum measurement bandwidth, that we want to design for a cantilever operating in vacuum/air (vs. water, which would affect the resonant frequency calculation) and that we want to dissipate less than 2 mW of power in the piezoresistor.</p>
+<p>Next, we define additional constraints using key-value pairs. We have decided to place lower limits on the range of thickness, width and bias voltage, although it is possible to place upper or lower limits on any of the design variables.</p>
+<p>Let&rsquo;s do the optimization.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy = c_epitaxy.optimize_performance_from_current(max_power, omega_min_hz, fluid_type, constraints);
+</pre></div></div>
+<p>And we can check the new performance.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy.print_performance()
+</pre></div></div>
+<p>If you compare the force resolution before and after the optimization you should see a significant improvement. When I ran this, it went from 125 pN to 2.5 pN.</p>
+<p>By default the code optimizes for force resolution. We&rsquo;re working on a simple interface for optimizing for displacement resolution, although just one line of code needs to be changed (search for problem.objective in cantilever.m).</p>
+<p>That wraps up the basic tutorial on optimizing an epitaxial cantilever. Read through sample_code.m and the comments in the code for additional tips.</p>
+<p>If you have other questions, please <a href="./contact.html">contact</a> us and be sure to <a href="./contributing.html">contribute</a> to help make the project better and help future users</p>
+<div id="footer">
+<div id="footer-text">
+Page generated 2009-07-25 20:37:46 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+</div>
+</div>
+</td>
+</tr>
+</table>
+<script src="http://www.google-analytics.com/urchin.js" type="text/javascript">
+</script>
+<script type="text/javascript">
+_uacct = "UA-71952-2";
+urchinTracker();
+</script>
+</body>
+</html>
