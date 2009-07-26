@@ -5,6 +5,11 @@ piezoD is under active development.
 
 = Revisions
 
+== Version 0.2.1
+
+- Fixed several typos and bugs in the code related to constraint handling during diffusion piezoresistor optimization.
+
+
 == Version 0.2.0
 
 - Rewrote all bias voltages in terms of the Wheatstone bridge bias
