@@ -26,6 +26,23 @@
 </div>
 <p>piezoD is under active development.</p>
 <h1>Revisions</h1>
+<h2>Version 0.3.0</h2>
+<ul>
+<li><p>Added</p>
+</li>
+</ul>
+<ul>
+<li><p>The optimization functions now take in just three arguments: paramater constraints, nonlinear constraints, and the optimization goal. Parameter constraints already existed in previous versions. The nonlinear constraints argument is new: it holds things like power dissipation and resonant frequency. The goal argument is also new: it corresponds to either optimizing for force or displacement resolution.</p>
+</li>
+</ul>
+<ul>
+<li><p>These changes make it much more convenient for the user to specify a fixed cantilever spring constant or spring constant range to optimize over. In the long term, this approach should be much more extensible than the previous implementation.</p>
+</li>
+</ul>
+<ul>
+<li><p>Updated sample_code.m accordingly.</p>
+</li>
+</ul>
 <h2>Version 0.2.1</h2>
 <ul>
 <li><p>Fixed several typos and bugs in the code related to constraint handling during diffusion piezoresistor optimization.</p>
@@ -85,7 +102,7 @@ user friendly and reduce barriers to usage.</p>
 </ul>
 <div id="footer">
 <div id="footer-text">
-Page generated 2009-07-25 20:47:19 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2009-09-13 14:48:15 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

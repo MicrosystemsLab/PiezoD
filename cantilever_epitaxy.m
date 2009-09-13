@@ -118,7 +118,7 @@ classdef cantilever_epitaxy < cantilever
         % variables. Secondary constraints (e.g. power dissipation,
         % piezoresistor thickness rather than ratio, resonant frequency)
         % are applied in optimization_constraints()
-        function [lb ub] = optimization_bounds(self, constraints)
+        function [lb ub] = optimization_bounds(self, parameter_constraints)
            
             min_l = 1e-6;
             max_l = 10e-3;
@@ -153,11 +153,11 @@ classdef cantilever_epitaxy < cantilever
             % Override the default values if any were provided
             % constraints is a set of key value pairs, e.g.
             % constraints = {{'min_l', 'max_v_bridge'}, {5e-6, 10}}
-            if length(constraints) > 0
-                keys = constraints{1};
-                values = constraints{2};
+            if ~isempty(parameter_constraints)
+                keys = parameter_constraints{1};
+                values = parameter_constraints{2};
                 for ii = 1:length(keys)
-                    eval([keys{ii} '=' num2str(values{ii})]);
+                    eval([keys{ii} '=' num2str(values{ii}) ';']);
                 end
             end
             
@@ -167,8 +167,8 @@ classdef cantilever_epitaxy < cantilever
                 max_dopant_concentration, max_t_pr_ratio];
         end
         
-        function x0 = initial_conditions_random(self, constraints)
-            [lb, ub] = self.optimization_bounds(constraints);
+        function x0 = initial_conditions_random(self, parameter_constraints)
+            [lb, ub] = self.optimization_bounds(parameter_constraints);
             
             % Random generation bounds. We use the conditions from
             % optimization_bounds so that we don't randomly generate

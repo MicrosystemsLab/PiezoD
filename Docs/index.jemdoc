@@ -12,9 +12,10 @@ piezoD is a tool for optimizing the performance of piezoresistive cantilevers. I
  -- doping methods: epitaxy, diffusion
 - constraints available
  -- cantilever design: dimensions, bias voltage, doping time/temperature/concentration
- -- computed: power dissipation, resonant frequency (vacuum or fluid), resistance
+ -- computed: power dissipation, resonant frequency (vacuum or fluid), resistance, spring constant
 - optimization targets
- -- force sensing in a given frequency range (broadband)
+ -- force resolution in a user specified bandwidth
+ -- displacement resolution in a user specified bandwidth
 
 = license
 

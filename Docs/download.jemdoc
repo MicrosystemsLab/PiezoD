@@ -1,16 +1,17 @@
 # jemdoc: menu{MENU}{download.html}
 = piezoD - download
 
-piezoD is composed of several Matlab classes. Here are some recent builds:
+piezoD is composed of several Matlab classes. You can download official releases from here.
 
-- [./v0.2.1.zip v0.2.1 - 07/24/09] - Fixed several bugs in the diffusion piezoresistor code and typos in sample_code.m
-- [./v0.2.0.tar.gz v0.2.0 - 04/28/09] - Rewrote constraint handling, other important things
-- [./v0.1.0.tar.gz v0.1.0 - 03/01/09] - Initial release
+- [./v0.3.0.zip v0.3.0 - 09\/13\/09] - Rewrote the method for passing in nonlinear constraints to the optimizer. It is much easier to optimize for a spring constant value or range now. Also changing the optimization goal from force to displacement can be specified more easily.
+- [./v0.2.1.zip v0.2.1 - 07\/24\/09] - Fixed several bugs in the diffusion piezoresistor code and typos in sample_code.m
+- [./v0.2.0.tar.gz v0.2.0 - 04\/28\/09] - Rewrote constraint handling, other important things
+- [./v0.1.0.tar.gz v0.1.0 - 03\/01\/09] - Initial release
 
 The versions posted here will lag behind the actual code development. The most recent code and detailed changes can be found at the [http://github.com/jcdoll/PiezoD/commits/master/ github] page.
 
 piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used.
 
-Installation is just a matter of sticking *cantilever.m*, *cantilever_diffusion.m* and *cantilever_epitaxy.m* in your Matlab path. You can check that it works by running *sample_code.m*.
+Installation is just a matter of placing *cantilever.m*, *cantilever_diffusion.m* and *cantilever_epitaxy.m* in your Matlab path. You can check that it works by running *sample_code.m*.
 
 *Important:* if piezoD seems to be running slowly, try running /clear/ twice before running it again. The origins of this bug are unclear.

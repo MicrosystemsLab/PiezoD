@@ -5,6 +5,16 @@ piezoD is under active development.
 
 = Revisions
 
+== Version 0.3.0
+
+- Added
+
+- The optimization functions now take in just three arguments: paramater constraints, nonlinear constraints, and the optimization goal. Parameter constraints already existed in previous versions. The nonlinear constraints argument is new: it holds things like power dissipation and resonant frequency. The goal argument is also new: it corresponds to either optimizing for force or displacement resolution.
+
+- These changes make it much more convenient for the user to specify a fixed cantilever spring constant or spring constant range to optimize over. In the long term, this approach should be much more extensible than the previous implementation.
+
+- Updated sample_code.m accordingly.
+
 == Version 0.2.1
 
 - Fixed several typos and bugs in the code related to constraint handling during diffusion piezoresistor optimization.

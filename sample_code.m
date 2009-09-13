@@ -1,15 +1,25 @@
-clear all
+clear
+clear
+
+% Constants
+% TODO: Refactor to a nicer form where they are defined in one place rather
+% than here and multiple places within cantilever.m
+VACUUM = 0;
+WATER = 1;
+
+FORCE_RESOLUTION = 0;
+DISPLACEMENT_RESOLUTION = 1;
 
 % Constraints
 freq_min = 1e0;
 freq_max = 1e3;
-omega_min_hz = 5*freq_max;
-fluid_type = 'vacuum';
-max_power = 2e-3;
 
-% Bounds
-constraints = {{'min_t', 'min_w', 'max_v_bridge'}, ...
+% Define optimization parameters
+parameter_constraints = {{'min_t', 'min_w', 'max_v_bridge'}, ...
                {340e-9,  1e-6,    5}};
+nonlinear_constraints = {{'omega_min_hz', 'fluid_type', 'max_power', 'min_k' ,'max_k', 'fixed_k'}, ...
+                         {5*freq_max    , VACUUM    , 2e-3, 10, 20, 15}};
+goal = DISPLACEMENT_RESOLUTION;
 
 % Initial values
 l = 30e-6;
@@ -29,13 +39,14 @@ c_epitaxy.print_performance();
 
 % Optimize the cantilever: use three initial random starting conditions
 % in order to ensure convergence
-c_epitaxy = c_epitaxy.optimize_performance(max_power, omega_min_hz, fluid_type, constraints);
+c_epitaxy = c_epitaxy.optimize_performance(parameter_constraints, nonlinear_constraints, goal);
 c_epitaxy.print_performance();
 
 % Or, just optimize from the current value. This is significantly faster
 % but < 1% of the time (generally) won't converge and will return a
 % suboptimal design.
-c_epitaxy = c_epitaxy.optimize_performance_from_current(max_power, omega_min_hz, fluid_type, constraints);
+c_epitaxy = c_epitaxy.optimize_performance_from_current(parameter_constraints, nonlinear_constraints, goal);
+c_epitaxy.print_performance();
 
 % Plot the noise spectrum
 c_epitaxy.plot_noise_spectrum();
@@ -49,5 +60,5 @@ c_diffusion = cantilever_diffusion(freq_min, freq_max, ...
     diffusion_time, diffusion_temp);
 c_diffusion.print_performance();
 
-c_diffusion = c_diffusion.optimize_performance_from_current(max_power, omega_min_hz, fluid_type, constraints);
+c_diffusion = c_diffusion.optimize_performance_from_current(parameter_constraints, nonlinear_constraints, goal);
 c_diffusion.print_performance();

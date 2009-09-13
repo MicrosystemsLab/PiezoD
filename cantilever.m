@@ -1,7 +1,7 @@
 % General Notes
 % * Usage
 %       Create a cantilever
-%           c = cantilever_diffusion(1e0, 1e3, 100e-6, 50e-6, 10e-6, 0.5, 
+%           c = cantilever_diffusion(1e0, 1e3, 100e-6, 50e-6, 10e-6, 0.5,
 %           0.5, 0.5, 5, 'boron', 20*60, 1000)
 %
 %       Calculate some useful properties
@@ -10,7 +10,7 @@
 %           [omega_d, Q] = c.omega_damped_hz_quality_factor();
 %
 %       Design a better cantilever
-%           c_optimized = c.optimize_performance(3.5e-3, 5e3, 'water', 
+%           c_optimized = c.optimize_performance(3.5e-3, 5e3, 'water',
 %               30e-9, 1e-6, 5)
 %
 %       More code is included in sample_code.m
@@ -26,7 +26,7 @@
 %       particularly well if there's a large difference in the size of the
 %       parameters it is tweaking. After each iteration it finds the
 %       sensitivity of the variable to optimize with respect to a change in
-%       the other variables. If dopant concentration is 1e19 per cc and 
+%       the other variables. If dopant concentration is 1e19 per cc and
 %       voltage is 5V, a unit change for each variable will have very
 %       different effects on the optimization output, and bfgs won't know
 %       what to do.
@@ -38,7 +38,7 @@
 % * Extending the Code
 %       Cantilever is the abstract base class that implements most of the
 %       details. In order to actually do anything, you need to implement
-%       a base class which implements at least these methods: 
+%       a base class which implements at least these methods:
 %           doping_profile
 %           optimization_scaling
 %           cantilever_from_state
@@ -60,10 +60,10 @@
 %
 % * Assumptions
 %       You're using the INA103 amplifier with a gain of at least 100. This
-%       determines the input referred voltage noise of the amplifier.       
+%       determines the input referred voltage noise of the amplifier.
 
 classdef cantilever
-    
+
     % Note that w is the total cantilever width where the piezoresistor is.
     % If the piezoresistor has two legs, then w_pr_ratio can only have a
     % maximum value of 0.5.
@@ -71,8 +71,8 @@ classdef cantilever
         l; % overall cantilever length
         w; % overall cantilever width (total width of both legs)
         t; % overall cantilever thickness
-  
-    
+
+
         l_pr_ratio; % piezoresistor length ratio
 
         v_bridge; % Volts
@@ -89,21 +89,21 @@ classdef cantilever
         k_b = 1.38e-23; % J/K
         k_b_eV = 8.617343e-5; % eV/K
         q = 1.60218e-19; % Coulombs
-        
+
         doping_type = 'boron'; % default value = boron
     end
-    
+
     methods (Abstract)
         doping_profile(self)
         optimization_scaling(self)
         cantilever_from_state(self, x0)
         initial_conditions_random(self)
         current_state(self)
-        optimization_bounds(self, constraints)
+        optimization_bounds(self, parameter_constraints)
     end
-    
-    methods    
-            
+
+    methods
+
         function self = cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, ...
                 v_bridge, doping_type)
 
@@ -120,7 +120,7 @@ classdef cantilever
 
             self.freq_max = freq_max;
             self.freq_min = freq_min;
-            
+
             self.doping_type = doping_type;
         end
 
@@ -132,7 +132,7 @@ classdef cantilever
         function w_pr = w_pr(self)
             w_pr = self.w/2;
         end
-        
+
         % ==================================
         % ========= Pretty output ==========
         % ==================================
@@ -158,11 +158,11 @@ classdef cantilever
             fprintf('Johnson/Hooge: %g \n', self.integrated_johnson_noise()/self.integrated_hooge_noise())
             fprintf('\n')
             fprintf('Sheet Resistance: %g \n', self.sheet_resistance())
-            
+
             [x, doping] = self.doping_profile();
             Nz = trapz(x, doping*1e6);
             fprintf('Nz: %g \n', Nz)
-            
+
             fprintf('\n')
             fprintf('Number of Carriers: %g \n', self.number_of_carriers());
             fprintf('Stiffness (N/m): %g \n', self.stiffness())
@@ -171,8 +171,8 @@ classdef cantilever
             fprintf('Vacuum freq: %f \n', self.omega_vacuum_hz())
             fprintf('Freq range: %f to %f \n', self.freq_min, self.freq_max)
             fprintf('\n')
-        end        
-        
+        end
+
         function print_performance_for_excel(self)
             variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
                 self.l_pr()*1e6, self.l_pr_ratio, ...
@@ -183,12 +183,12 @@ classdef cantilever
                 self.resistance(), self.power_dissipation()*1e3, ...
                 self.integrated_noise(), self.integrated_johnson_noise(), ...
                 self.integrated_hooge_noise(), self.knee_frequency()];
-            
+
             for print_index = 1:length(variables_to_print)
-               fprintf('%g \t', variables_to_print(print_index)); 
+                fprintf('%g \t', variables_to_print(print_index));
             end
         end
-        
+
         % ==================================
         % ===== Calculate resistance =======
         % ==================================
@@ -197,7 +197,7 @@ classdef cantilever
         % other resistances (gamma)
         % Units: ohms
         function resistance = resistance(self)
-            number_of_squares = self.resistor_length()/self.w_pr();            
+            number_of_squares = self.resistor_length()/self.w_pr();
             resistance = number_of_squares * self.sheet_resistance() / self.gamma();
         end
 
@@ -215,12 +215,12 @@ classdef cantilever
             conductivity = self.conductivity(doping); % ohm-cm
             Rs = 1/trapz(x*1e2, conductivity); % convert x to cm
         end
-        
+
         function sigma = conductivity(self, dopant_concentration)
             mu = self.mobility(dopant_concentration); % cm^2/V-sec
             sigma = mu.*self.q.*dopant_concentration; % C/V-sec-cm
         end
-        
+
         % Data from "Modeling of Carrier Mobility Against Carrier Concentration
         % in Arsenic-,  Phosphorus-, and Boron-Doped  Silicon"
         % Masetti, Serveri and Solmi - IEEE Trans. on Electron Devices, (1983)
@@ -229,7 +229,7 @@ classdef cantilever
 
             n = dopant_concentration;
             p = dopant_concentration;
-            
+
             switch self.doping_type
                 case 'arsenic'
                     % Arsenic data
@@ -241,7 +241,7 @@ classdef cantilever
                     alpha = 0.680;
                     beta = 2.0;
                     mobility = mu_0 + (mu_max - mu_0)./(1 + (n./C_r).^alpha) - mu_1./(1 + (C_s./n).^beta);
-               
+
                 case 'phosphorus'
                     % Phosphorus data
                     mu_0 = 68.5;
@@ -303,7 +303,7 @@ classdef cantilever
         function johnson_noise_density = johnson_noise_density(self)
             johnson_noise_density = sqrt(4 * self.k_b * self.T * self.resistance());
         end
-        
+
         % Integrated Johnson noise from the entire Wheatstone bridge
         % Unit: V
         function integrated_johnson_noise = integrated_johnson_noise(self)
@@ -314,7 +314,7 @@ classdef cantilever
         function integrated_amplifier_noise = integrated_amplifier_noise(self)
             integrated_amplifier_noise = (1.8e-9 * sqrt(self.freq_max - self.freq_min))^2 + (10e-9*sqrt(log(self.freq_max/self.freq_min)))^2;
         end
-        
+
         % Calculate the knee frequency
         % Equating 1/f noise and johnson... sqrt(alpha*V_bridge^2/(2*N*f_knee)) = sqrt(4*kb*T*R)
         % Leads to f_knee = alpha*V_bridge^2/(2*N*S_j^2)
@@ -344,7 +344,7 @@ classdef cantilever
             frequency = logspace(log10(self.freq_min), log10(self.freq_max), 1e4);
             noise = self.voltage_noise(frequency);
             axis equal;
-            
+
             figure
             plot(frequency, noise);
             set(gca, 'xscale','log', 'yscale','log');
@@ -360,9 +360,9 @@ classdef cantilever
         function piezoresistance_factor = piezoresistance_factor(self, dopant_concentration)
             b = 1.53e22;
             a = 0.2014;
-            piezoresistance_factor = log10((b./dopant_concentration) .^ a);            
+            piezoresistance_factor = log10((b./dopant_concentration) .^ a);
         end
-        
+
         function max_factor = max_piezoresistance_factor(self)
             switch self.doping_type
                 case 'boron'
@@ -373,17 +373,17 @@ classdef cantilever
                     max_factor = 103e-11; %Pi at low concentration in 100 direction
             end
         end
-        
+
         % Reduction in sensitivity from piezoresistor not located just at the
         % surface. Calculated for the general case of an arbitrarily shaped
         % doping profile. Taken from Sung-Jin Park's Hilton Head 2008 paper.
         % Units: None
         function beta = beta(self)
             [x, doping_concentration] = self.doping_profile();
-            
+
             % x is supposed to vary from t/2 to -t/2
             x = (self.t/2 - x)*1e2; % x: m -> cm
-             
+
             mu = self.mobility(doping_concentration); % cm^2/V-s
             P = self.piezoresistance_factor(doping_concentration);
 
@@ -423,13 +423,13 @@ classdef cantilever
         function force_resolution = force_resolution(self)
             force_resolution = self.integrated_noise()/self.force_sensitivity();
         end
-        
+
         function displacement_resolution = displacement_resolution(self)
             displacement_resolution = self.force_resolution()/self.stiffness();
         end
-        
-        
-        
+
+
+
         % ==================================
         % ======== Beam mechanics ==========
         % ==================================
@@ -441,7 +441,7 @@ classdef cantilever
             switch self.doping_type
                 case 'boron'
                     elastic_modulus = 169e9; % <110> direction
-                case 'phosphorus' 
+                case 'phosphorus'
                     elastic_modulus = 130e9; % <100> direction
                 case 'arsenic'
                     elastic_modulus = 130e9; % <100> direction
@@ -483,8 +483,8 @@ classdef cantilever
         function omega_damped_hz = omega_damped_hz(self)
             omega_damped_hz = self.omega_damped() / (2*pi);
         end
-        
-        
+
+
         % Note that this is a combination of omega_damped_hz() and
         % quality_factor(), but is 2x faster than evaluating both
         % separately.
@@ -494,38 +494,38 @@ classdef cantilever
         function [omega_damped_hz, quality_factor] = omega_damped_hz_quality_factor(self)
             omega_damped = self.omega_damped();
             omega_damped_hz = omega_damped / (2*pi);
-            
+
             hydro = self.hydrodynamic_function(omega_damped);
             quality_factor = (4 * self.rho_cantilever * self.t / (pi * self.rho_fluid * self.w) + real(hydro)) / imag(hydro);
         end
-        
+
         % Holding the cantilever width and thickness constant, figure out
         % the maximum length to meet a given natural frequency requirement
         function max_length = max_length_for_given_natural_frequency(self)
-            
+
             function residual = find_max_length(length)
                 self.l = length;
-                
+
                 % This line is necessary because of a bug in MATLAB
-%                 self.omega_damped_hz();
-                
+                %                 self.omega_damped_hz();
+
                 residual = abs(self.omega_damped_hz() - self.freq_max);
             end
-            
+
             options = optimset('TolX', 1e-9);
             min_estimated_length = 0;
             max_estimated_length = 1e-3; % If you're doing very low frequency stuff, you might need to increase this
             max_length = fminbnd(@find_max_length, min_estimated_length, max_estimated_length, options);
         end
 
-        % Calculate the quality factor        
+        % Calculate the quality factor
         % TODO: Only valid for Q >> 1, should be improved from Sader papers in
         % the future
         function quality_factor = quality_factor(self)
             hydro = self.hydrodynamic_function(self.omega_damped());
             quality_factor = (4 * self.rho_cantilever * self.t / (pi * self.rho_fluid * self.w) + real(hydro)) / imag(hydro);
         end
-        
+
         function reynolds = reynolds(self, omega)
             reynolds = (self.rho_fluid* omega * self.w^2) / self.eta_fluid;
         end
@@ -540,13 +540,19 @@ classdef cantilever
             C = C_n(1); % Right now only for 1st order modes
             kappa = C * self.w / self.l;
         end
-        
+
         % For the inviscid case (Re >> 1)
         % From "Resonant frequencies of a rectangular cantilever beam
         % immersed in a fluid", Sader (2006)
         function hydro = hydrodynamic_function_inviscid(self)
             kappa = self.kappa();
             hydro = (1 + 0.74273*kappa + 0.14862*kappa^2)/(1 + 0.74273*kappa + 0.35004*kappa^2 + 0.058364*kappa^3);
+        end
+
+        % Perform force and displacement resolution optimizations with the
+        % spring constant fixed.
+        function resolution_tradeoff_plot(self)
+
         end
 
         % Calculate hydrodynamic function
@@ -607,47 +613,98 @@ classdef cantilever
             hydro = complex(tau_real, tau_imag);
 
         end
-                
+
         % ==================================
         % ========= Optimization  ==========
-        % ==================================        
+        % ==================================
 
         % Calculate force resolution (goal) from state variable vector
         function force_resolution = optimize_force_resolution(self, x0)
-            c_new = self.cantilever_from_state(x0);            
+            c_new = self.cantilever_from_state(x0);
             force_resolution = c_new.force_resolution()*1e12;
         end
         
+        function force_resolution = optimize_displacement_resolution(self, x0)
+            c_new = self.cantilever_from_state(x0);
+            force_resolution = c_new.displacement_resolution()*1e9;
+        end
+
+
         % Nonlinear optimization constraints
         % All constraint components (e.g. C(1)) are required to be negative
-        function [C, Ceq] = optimization_constraints(self, x0, omega_min_hz, max_power, fluid_type)
-            c_new = self.cantilever_from_state(x0);            
-            
+        function [C, Ceq] = optimization_constraints(self, x0, nonlinear_constraints)
+
+            % Fluid type constants (used below)
+            VACUUM = 0;
+            WATER = 1;
+
+
+            c_new = self.cantilever_from_state(x0);
+
+            % Read out the constraints as key-value pairs, e.g.
+            % {{'omega_min_hz', 'min_k'}, {1000, 10}}
+            if ~isempty(nonlinear_constraints)
+                keys = nonlinear_constraints{1};
+                values = nonlinear_constraints{2};
+                for ii = 1:length(keys)
+                    eval([keys{ii} '=' num2str(values{ii}) ';']);
+                end
+            end
+
+            % Force resolution must always be positive
+            % We start with this single element vector and then append any
+            % additional constraints that the user has provided.
+            C(1) = -c_new.force_resolution();
+
             % Natural frequency
-            switch fluid_type
-                case 'vacuum'
-                    C(1) = omega_min_hz - c_new.omega_vacuum_hz();
-                case 'water'
-                    C(1) = omega_min_hz - c_new.omega_damped_hz();
+            if exist('omega_min_hz')
+                switch fluid_type
+                    case VACUUM
+                        freq_constraint = omega_min_hz - c_new.omega_vacuum_hz();
+                    case WATER
+                        freq_constraint = omega_min_hz - c_new.omega_damped_hz();
+                end
+                C = [C freq_constraint];
             end
 
             % Power dissipation
-            C(2) = c_new.power_dissipation() - max_power;
-            
-            C(3) = -c_new.force_resolution(); % require that force_resolution is positive
-            
-            % Misc constraints
-            C(4) = 100 - c_new.stiffness(); % stiffness at least 42 N/m
-%             C(3) = 5*c_new.w - c_new.l; % length should be at least 5x the width
-%             C(4) = 3e-6 - c_new.w*c_new.w_gap_ratio; % Air gap needs to be at least 3 microns wide
-%             C(5) = 2*c_new.t - c_new.w; % width should be at least 2x the thickness
+            if exist('max_power')
+                power_constraint = c_new.power_dissipation() - max_power;
+                C = [C power_constraint];
+            end
 
+            if exist('min_k')
+                min_k_constraint = min_k - c_new.stiffness();
+                C = [C min_k_constraint];
+            end
+
+            if exist('max_k')
+                max_k_constraint = c_new.stiffness() - max_k;
+                C = [C max_k_constraint];
+            end
+
+
+
+            % Now for equality based constraints
             Ceq = [];
+
+            if exist('fixed_k')
+                fixed_k_constraint = c_new.stiffness() - fixed_k;
+                Ceq = [Ceq fixed_k_constraint];
+            end
+
+
+
+            % Misc constraints
+            %             C(3) = 5*c_new.w - c_new.l; % length should be at least 5x the width
+            %             C(4) = 3e-6 - c_new.w*c_new.w_gap_ratio; % Air gap needs to be at least 3 microns wide
+            %             C(5) = 2*c_new.t - c_new.w; % width should be at least 2x the thickness
+
             % Optional equality constraints
-%             Ceq(1) = omega_min_hz - c_new.omega_vacuum_hz(); % for lock-in
-%             Ceq(1) = (t - t*t_pr_ratio) - .3e-6; % Make sure that the cantilever substrate starts out a X microns thick
-%             Ceq(2) = doping - 4e19;
-%             Ceq(3) = t*t_pr_ratio - .3e-6;
+            %             Ceq(1) = omega_min_hz - c_new.omega_vacuum_hz(); % for lock-in
+            %             Ceq(1) = (t - t*t_pr_ratio) - .3e-6; % Make sure that the cantilever substrate starts out a X microns thick
+            %             Ceq(2) = doping - 4e19;
+            %             Ceq(3) = t*t_pr_ratio - .3e-6;
         end
 
         % This cantilever problem isn't guaranteed to converge, and in
@@ -656,55 +713,71 @@ classdef cantilever
         % random initial seed and perform the optimization and checking to
         % make sure that it converges repeatedly.
         function optimized_cantilever = optimize_performance(self, ...
-                max_power, omega_min_hz, fluid_type, constraints)
-            
+                parameter_constraints, nonlinear_constraints, goal)
+
+            FORCE_RESOLUTION = 0;
+            DISPLACEMENT_RESOLUTION = 1;
+
             n = 3; % the number of trials we want to try
             percent_match = 0.01;
             randomize_starting_conditions = 1;
-            
+
             for ii = 1:n
-                c{ii} = self.optimize_performance_once(max_power, omega_min_hz, ...
-                    fluid_type, constraints, randomize_starting_conditions);
-                force_resolution(ii) = c{ii}.force_resolution();
+                c{ii} = self.optimize_performance_once(parameter_constraints, ...
+                    nonlinear_constraints, randomize_starting_conditions, goal);
+                
+                if goal == FORCE_RESOLUTION
+                    resolution(ii) = c{ii}.force_resolution();
+                elseif goal == DISPLACEMENT_RESOLUTION
+                    resolution(ii) = c{ii}.displacement_resolution();
+                end
             end
-            
-            best_index = find(force_resolution == min(force_resolution));
+
+            best_index = find(resolution == min(resolution));
             optimized_cantilever = c{best_index};
-            
-            
+
+
             % Output the results
-            min_resolution = min(force_resolution);
-            max_resolution = max(force_resolution);
-            
+            min_resolution = min(resolution);
+            max_resolution = max(resolution);
+
             if (1 - min_resolution/max_resolution) > percent_match
-                fprintf(['Optimization did not converge at least once. Values = ' num2str(force_resolution) '\n'])
+                fprintf(['Optimization did not converge at least once. Values = ' num2str(resolution) '\n'])
             end
-            fprintf(['Optimization converged. Values = ' num2str(force_resolution) '\n'])
+            fprintf(['Optimization converged. Values = ' num2str(resolution) '\n'])
         end
-        
+
         % Optimize, but don't randomize starting point
         function optimized_cantilever = optimize_performance_from_current(self, ...
-                max_power, omega_min_hz, fluid_type, constraints)
+                parameter_constraints, nonlinear_constraints, goal)
             randomize_starting_conditions = 0;
-            optimized_cantilever = self.optimize_performance_once(max_power, omega_min_hz, ...
-                    fluid_type, constraints, randomize_starting_conditions);
+            optimized_cantilever = self.optimize_performance_once(parameter_constraints, ...
+                nonlinear_constraints, goal, randomize_starting_conditions);
         end
-        
+
         function optimized_cantilever = optimize_performance_once(self, ...
-                max_power, omega_min_hz, fluid_type, constraints, random_flag)
+                parameter_constraints, nonlinear_constraints, goal, random_flag)
+
+            FORCE_RESOLUTION = 0;
+            DISPLACEMENT_RESOLUTION = 1;
 
             scaling = self.optimization_scaling();
-            problem.objective = @self.optimize_force_resolution;
             
+            if goal == FORCE_RESOLUTION
+                problem.objective = @self.optimize_force_resolution;
+            elseif goal == DISPLACEMENT_RESOLUTION
+                problem.objective = @self.optimize_displacement_resolution;
+            end
+
             % If random_flag = 1, start from random conditions. Otherwise
             % start from the current cantilever state vector
             if random_flag == 1
-                problem.x0 = scaling.*self.initial_conditions_random(constraints);
+                problem.x0 = scaling.*self.initial_conditions_random(parameter_constraints);
             else
                 problem.x0 = scaling.*self.current_state();
             end
-                
-            [lb ub] = self.optimization_bounds(constraints);
+
+            [lb ub] = self.optimization_bounds(parameter_constraints);
             problem.lb = scaling.*lb;
             problem.ub = scaling.*ub;
 
@@ -719,7 +792,7 @@ classdef cantilever
             problem.options.Algorithm = 'Interior-point';
             problem.solver = 'fmincon';
 
-            problem.nonlcon = @(x) self.optimization_constraints(x, omega_min_hz, max_power, fluid_type);
+            problem.nonlcon = @(x) self.optimization_constraints(x, nonlinear_constraints);
 
             x = fmincon(problem);
             optimized_cantilever = self.cantilever_from_state(x);
