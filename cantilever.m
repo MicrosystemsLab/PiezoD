@@ -72,11 +72,11 @@ classdef cantilever
         w; % overall cantilever width (total width of both legs)
         t; % overall cantilever thickness
 
-
         l_pr_ratio; % piezoresistor length ratio
 
         v_bridge; % Volts
-
+        number_of_piezoresistors = 2;
+        
         rho_cantilever = 2330;
         rho_fluid = 1e3;
         eta_fluid = 1e-3;
@@ -91,6 +91,21 @@ classdef cantilever
         q = 1.60218e-19; % Coulombs
 
         doping_type = 'boron'; % default value = boron
+    end
+    
+    % Can be referred to with cantilever.variableName
+    properties (Constant)
+        colorBlue = [11/255 132/255 199/255];
+        colorOrange = [255/255 102/255 0/255];
+        colorGreen = [0/255 153/255 0/255];
+        markerSize = 8;
+        colorBlack = [0 0 0];   
+        
+        goalForceResolution = 0;
+        goalDisplacementResolution = 1;
+        
+        fluidVacuum = 0;
+        fluidWater = 1;
     end
 
     methods (Abstract)
@@ -132,7 +147,7 @@ classdef cantilever
         function w_pr = w_pr(self)
             w_pr = self.w/2;
         end
-
+        
         % ==================================
         % ========= Pretty output ==========
         % ==================================
@@ -140,8 +155,10 @@ classdef cantilever
         % fprintf performance
         function print_performance(self)
             fprintf('Cantilever L/W/T: %f %f %f \n', self.l*1e6, self.w*1e6, self.t*1e6)
+            fprintf('PR L/W: %f %f %f \n', self.l_pr()*1e6, self.w_pr()*1e6)
             fprintf('PR Length Ratio: %g \n', self.l_pr_ratio)
-            fprintf('Wheatstone Bridge Biase voltage: %f \n', self.v_bridge)
+            fprintf('Wheatstone bridge bias voltage: %f \n', self.v_bridge)
+            fprintf('Number of silicon resistors: %f \n', self.number_of_piezoresistors)
             fprintf('\n')
             fprintf('Resistance: %f \n', self.resistance())
             fprintf('Power dissipation (mW): %g \n', self.power_dissipation()*1e3)
@@ -154,6 +171,7 @@ classdef cantilever
             fprintf('Integrated noise (V): %g \n', self.integrated_noise())
             fprintf('Integrated johnson noise (V): %g \n', self.integrated_johnson_noise())
             fprintf('Integrated 1/f noise (V): %g \n', self.integrated_hooge_noise())
+            fprintf('Amplifier noise (V): %g \n', self.integrated_amplifier_noise())
             fprintf('Knee frequency (Hz): %g \n', self.knee_frequency())
             fprintf('Johnson/Hooge: %g \n', self.integrated_johnson_noise()/self.integrated_hooge_noise())
             fprintf('\n')
@@ -264,7 +282,7 @@ classdef cantilever
                     beta = 2.00;
                     p_c = 9.23e16;
                     mobility = mu_0.*exp(-p_c./n) + mu_max./(1 + (p./C_r).^alpha) - mu_1./(1 + (C_s./p).^beta);
-
+                    
             end
         end
 
@@ -287,7 +305,7 @@ classdef cantilever
         % noise, so the 1/f noise density is sqrt(2) larger
         % Units: V
         function hooge_noise_density = hooge_noise_density(self)
-            hooge_noise_density = sqrt(2)/2*sqrt(self.alpha*self.v_bridge^2/self.number_of_carriers());
+            hooge_noise_density = sqrt(self.number_of_piezoresistors)/2*sqrt(self.alpha*self.v_bridge^2/self.number_of_carriers());
         end
 
         % Integrated 1/f noise density for the entire Wheatstone bridge
@@ -312,7 +330,16 @@ classdef cantilever
 
         % Assume INA103 type performance
         function integrated_amplifier_noise = integrated_amplifier_noise(self)
-            integrated_amplifier_noise = (1.8e-9 * sqrt(self.freq_max - self.freq_min))^2 + (10e-9*sqrt(log(self.freq_max/self.freq_min)))^2;
+            
+            % Additional sqrt(2) prefactor because there are two amplifier inputs
+            Vamp_J = 1.2e-9*sqrt(2)*sqrt(self.freq_max - self.freq_min); % 1.8 nV/rtHz
+            Vamp_H = 4e-9 *sqrt(2)*sqrt(log(self.freq_max/self.freq_min)); % 10 nV/rtHz @ 1Hz, 3.3 (sqrt of 10) nV/rtHz @ 10Hz
+            Iamp_J = 2e-12 *sqrt(2)*sqrt(self.freq_max - self.freq_min);  % 2pA/rtHz
+            Iamp_H = 25e-12*sqrt(2)*sqrt(log(self.freq_max/self.freq_min)); % 25 pA/rtHz @ 1Hz
+            
+            R_effective = self.resistance()/2; % resistance seen by amplifier inputs
+            
+            integrated_amplifier_noise = sqrt(Vamp_J^2 + Vamp_H^2 + (R_effective*Iamp_J)^2 + (R_effective*Iamp_H)^2);
         end
 
         % Calculate the knee frequency
@@ -326,11 +353,7 @@ classdef cantilever
         % Source are uncorrelated so they add in RMS
         % Units: V = sqrt(V^2 + V^2 + ..)
         function integrated_noise = integrated_noise(self)
-            % The amplifier noise was already squared above in order to
-            % correctly not generate the cross-term
-            integrated_noise = sqrt(self.integrated_johnson_noise()^2 + ...
-                self.integrated_hooge_noise()^2 + ...
-                self.integrated_amplifier_noise());
+            integrated_noise = sqrt(self.integrated_johnson_noise()^2 + self.integrated_hooge_noise()^2 + self.integrated_amplifier_noise()^2);
         end
 
         % Calculate the noise in V/rtHz at a given frequency
@@ -345,10 +368,23 @@ classdef cantilever
             noise = self.voltage_noise(frequency);
             axis equal;
 
-            figure
-            plot(frequency, noise);
+            plot(frequency, noise, 'LineWidth', 2);
             set(gca, 'xscale','log', 'yscale','log');
+            set(gca, 'LineWidth', 1.5, 'FontSize', 14);
+            ylabel('Noise Voltage Spectral Density (V/rtHz)', 'FontSize', 16);
+            xlabel('Frequency (Hz)', 'FontSize', 16);
+            
+            
         end
+        
+        function f_min_cumulative = f_min_cumulative(self)
+            frequency = logspace(log10(self.freq_min), log10(self.freq_max), 1e4);
+            noise = self.voltage_noise(frequency)
+            sensitivity = self.cPR.force_sensitivity();
+            force_noise_density = noise./sensitivity;
+            f_min_cumulative = sqrt(cumtrapz(frequency, force_noise_density.^2));
+        end
+
 
         % ==================================
         % ===== Calculate sensitivity ======
@@ -393,22 +429,29 @@ classdef cantilever
         end
 
         % Ratio of piezoresistor resistance to total resistance (< 1)
-        % Assume 1 for now
+        % Assume that metal interconnects are used and that their resistance is about 10% of the total
         function gamma = gamma(self)
-            gamma = 0.5;
+            gamma = 0.9;
         end
 
         % Units: V/N
         function force_sensitivity = force_sensitivity(self)
             v_bias = self.v_bridge/2;
-            force_sensitivity = 3*(self.l - self.l_pr()/2)*self.max_piezoresistance_factor()/(2*self.w*self.t^2)*self.beta()*self.gamma()*v_bias;
+            longitudinal_sensitivity = 3*(self.l - self.l_pr()/2)*self.max_piezoresistance_factor()/(2*self.w*self.t^2)*self.beta()*self.gamma()*v_bias;
+
+            % TODO: Reduce the sensitivity due to transverse current flow at the tip of the cantilever.
+            % This requires that the model is extended to include the gap between the legs
+            % Otherwise, if we're assuming an infinitesimal gap, then there is no transverse reduction
+            % And when the transverse length has a small resistance relative to the longitudinal resistance, the effect
+            % will be negligible.
+            
+            force_sensitivity = longitudinal_sensitivity;
         end
 
 
         % ==================================
         % == Calculate power dissipation ===
         % ==================================
-
 
         % Power dissipation (W) in the cantilever
         function power_dissipation = power_dissipation(self)
@@ -506,9 +549,6 @@ classdef cantilever
             function residual = find_max_length(length)
                 self.l = length;
 
-                % This line is necessary because of a bug in MATLAB
-                %                 self.omega_damped_hz();
-
                 residual = abs(self.omega_damped_hz() - self.freq_max);
             end
 
@@ -551,14 +591,45 @@ classdef cantilever
 
         % Perform force and displacement resolution optimizations with the
         % spring constant fixed.
-        function resolution_tradeoff_plot(self)
+        function resolution_tradeoff_plot(self, parameter_constraints, nonlinear_constraints, k_range)
 
+            n_k = 10;
+            goal = 0; % Irrelevant for this calculation
+            k_values = logspace( log10(min(k_range)), log10(max(k_range)), n_k);
+            
+            for ii = 1:length(k_values)
+                k = k_values(ii);
+
+                % Add the fixed k constraint
+                nonlinear_constraints_k = { cat(2, nonlinear_constraints{1}, 'fixed_k'), cat(2, nonlinear_constraints{2}, k)};
+                
+                self = self.optimize_performance_from_current(parameter_constraints, nonlinear_constraints_k, goal);
+                
+                force_resolution(ii) = self.force_resolution();
+                displacement_resolution(ii) = self.displacement_resolution();
+            end
+           
+            figure
+            hold on
+            plot(k_values, force_resolution, '-o' ,'LineWidth', 2, ...
+                'MarkerSize', cantilever.markerSize, 'Color', cantilever.colorBlue, ...
+                'MarkerFaceColor', cantilever.colorBlue, 'MarkerEdgeColor', cantilever.colorBlack);
+            plot(k_values, displacement_resolution, '-o' ,'LineWidth', 2, ...
+                'MarkerSize', cantilever.markerSize, 'Color', cantilever.colorOrange, ...
+                'MarkerFaceColor', cantilever.colorOrange, 'MarkerEdgeColor', cantilever.colorBlack);
+            hold off
+            set(gca, 'yscale', 'log', 'xscale', 'log', 'LineWidth', 1.5, 'FontSize', 14);
+            
+            xlabel('Spring Constant (N/m)', 'FontSize', 16);
+            ylabel('Resolution (N or m)', 'FontSize', 16);
+            legend('Force resolution', 'Displacement Resolution');
+            
+            print('-dpng','-r300', 'ResolutionTradeoff')
+            
         end
 
         % Calculate hydrodynamic function
         function hydro = hydrodynamic_function(self, omega)
-
-
             % Calculate Re and kappa
             kappa = self.kappa();
             reynolds = self.reynolds(omega);
@@ -620,24 +691,19 @@ classdef cantilever
 
         % Calculate force resolution (goal) from state variable vector
         function force_resolution = optimize_force_resolution(self, x0)
-            c_new = self.cantilever_from_state(x0);
-            force_resolution = c_new.force_resolution()*1e12;
+            self = self.cantilever_from_state(x0);
+            force_resolution = self.force_resolution()*1e12;
         end
         
-        function force_resolution = optimize_displacement_resolution(self, x0)
-            c_new = self.cantilever_from_state(x0);
-            force_resolution = c_new.displacement_resolution()*1e9;
+        function displacement_resolution = optimize_displacement_resolution(self, x0)
+            self = self.cantilever_from_state(x0);
+            displacement_resolution = self.displacement_resolution()*1e9;
         end
 
 
         % Nonlinear optimization constraints
         % All constraint components (e.g. C(1)) are required to be negative
         function [C, Ceq] = optimization_constraints(self, x0, nonlinear_constraints)
-
-            % Fluid type constants (used below)
-            VACUUM = 0;
-            WATER = 1;
-
 
             c_new = self.cantilever_from_state(x0);
 
@@ -659,9 +725,9 @@ classdef cantilever
             % Natural frequency
             if exist('omega_min_hz')
                 switch fluid_type
-                    case VACUUM
+                    case cantilever.fluidVacuum
                         freq_constraint = omega_min_hz - c_new.omega_vacuum_hz();
-                    case WATER
+                    case cantilever.fluidWater
                         freq_constraint = omega_min_hz - c_new.omega_damped_hz();
                 end
                 C = [C freq_constraint];
@@ -683,8 +749,15 @@ classdef cantilever
                 C = [C max_k_constraint];
             end
 
+            % Silicon: L/W > 10, W/T > 3
+            length_width_ratio = 5 - c_new.l/c_new.w;
+            width_thickness_ratio = 2 - c_new.w/c_new.t;
+            C = [C length_width_ratio width_thickness_ratio];
 
-
+            % PR: L/W > 5
+            pr_length_width_ratio = 2 - c_new.l_pr()/c_new.w_pr();
+            C = [C pr_length_width_ratio];
+            
             % Now for equality based constraints
             Ceq = [];
 
@@ -693,12 +766,8 @@ classdef cantilever
                 Ceq = [Ceq fixed_k_constraint];
             end
 
-
-
             % Misc constraints
-            %             C(3) = 5*c_new.w - c_new.l; % length should be at least 5x the width
             %             C(4) = 3e-6 - c_new.w*c_new.w_gap_ratio; % Air gap needs to be at least 3 microns wide
-            %             C(5) = 2*c_new.t - c_new.w; % width should be at least 2x the thickness
 
             % Optional equality constraints
             %             Ceq(1) = omega_min_hz - c_new.omega_vacuum_hz(); % for lock-in
@@ -712,30 +781,24 @@ classdef cantilever
         % initial conditions. For this reason, it is best to start from a
         % random initial seed and perform the optimization and checking to
         % make sure that it converges repeatedly.
-        function optimized_cantilever = optimize_performance(self, ...
-                parameter_constraints, nonlinear_constraints, goal)
-
-            FORCE_RESOLUTION = 0;
-            DISPLACEMENT_RESOLUTION = 1;
+        function optimized_cantilever = optimize_performance(self, parameter_constraints, nonlinear_constraints, goal)
 
             n = 3; % the number of trials we want to try
             percent_match = 0.01;
             randomize_starting_conditions = 1;
-
+            
             for ii = 1:n
-                c{ii} = self.optimize_performance_once(parameter_constraints, ...
-                    nonlinear_constraints, randomize_starting_conditions, goal);
+                c{ii} = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
                 
-                if goal == FORCE_RESOLUTION
+                if goal == cantilever.goalForceResolution
                     resolution(ii) = c{ii}.force_resolution();
-                elseif goal == DISPLACEMENT_RESOLUTION
+                elseif goal == cantilever.goalDisplacementResolution
                     resolution(ii) = c{ii}.displacement_resolution();
                 end
             end
 
             best_index = find(resolution == min(resolution));
             optimized_cantilever = c{best_index};
-
 
             % Output the results
             min_resolution = min(resolution);
@@ -748,30 +811,24 @@ classdef cantilever
         end
 
         % Optimize, but don't randomize starting point
-        function optimized_cantilever = optimize_performance_from_current(self, ...
-                parameter_constraints, nonlinear_constraints, goal)
+        function optimized_cantilever = optimize_performance_from_current(self, parameter_constraints, nonlinear_constraints, goal)
             randomize_starting_conditions = 0;
-            optimized_cantilever = self.optimize_performance_once(parameter_constraints, ...
-                nonlinear_constraints, goal, randomize_starting_conditions);
+            optimized_cantilever = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
         end
 
-        function optimized_cantilever = optimize_performance_once(self, ...
-                parameter_constraints, nonlinear_constraints, goal, random_flag)
-
-            FORCE_RESOLUTION = 0;
-            DISPLACEMENT_RESOLUTION = 1;
+        function optimized_cantilever = optimize_performance_once(self, parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions)
 
             scaling = self.optimization_scaling();
-            
-            if goal == FORCE_RESOLUTION
+           
+            if goal == cantilever.goalForceResolution
                 problem.objective = @self.optimize_force_resolution;
-            elseif goal == DISPLACEMENT_RESOLUTION
+            elseif goal == cantilever.goalDisplacementResolution
                 problem.objective = @self.optimize_displacement_resolution;
             end
 
             % If random_flag = 1, start from random conditions. Otherwise
             % start from the current cantilever state vector
-            if random_flag == 1
+            if randomize_starting_conditions == 1
                 problem.x0 = scaling.*self.initial_conditions_random(parameter_constraints);
             else
                 problem.x0 = scaling.*self.current_state();
@@ -789,9 +846,11 @@ classdef cantilever
             problem.options.MaxIter = 1000;
             problem.options.Display = 'iter';
 
+            problem.options.UseParallel = 'always'; % For multicore processors
+            
             problem.options.Algorithm = 'Interior-point';
             problem.solver = 'fmincon';
-
+            
             problem.nonlcon = @(x) self.optimization_constraints(x, nonlinear_constraints);
 
             x = fmincon(problem);

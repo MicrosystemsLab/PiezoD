@@ -5,11 +5,26 @@ piezoD is under active development.
 
 = Revisions
 
+== Version 0.3.1
+
+- Moved the goals and constants (e.g. VACUUM = 1) to class variables for tidiness. See 'sample_code' for examples.
+
+- Rearranged the cantilever print output (both normal and Excel)
+
+- Added a 'number_of_piezoresistors' parameter to specify the number of silicon resistors in the bridge. This only affects the 1/f noise of the bridge.
+
+- Rewrote the amplifier noise as integrated_amplifier_noise(). Includes the current noise, both Johnson and 1/f, of the amplifiern now. This change favors lower impedance piezoresistors. Assumes that the amplifier is the TI INA103, which is a BJT instrumentation amplifier so has high current noise and low voltage noise.
+
+- Changed the default gamma value from 0.5 to 0.9. Gamma is the ratio of piezoresistor resistance to total resistance, so this change assumes that you've designed your device with low resistance interconnects.
+
+- Added resolution_tradeoff_plot(), which shows the achievable tradeoff between force and displacement resolution given the other cantilever constraints.
+
+- Added default constraints on the L/W and W/T ratio of the cantilever.
+
+
 == Version 0.3.0
 
-- Added
-
-- The optimization functions now take in just three arguments: paramater constraints, nonlinear constraints, and the optimization goal. Parameter constraints already existed in previous versions. The nonlinear constraints argument is new: it holds things like power dissipation and resonant frequency. The goal argument is also new: it corresponds to either optimizing for force or displacement resolution.
+- The optimization functions now take in just three arguments: parameter constraints, nonlinear constraints, and the optimization goal. Parameter constraints already existed in previous versions. The nonlinear constraints argument is new: it holds things like power dissipation and resonant frequency. The goal argument is also new: it corresponds to either optimizing for force or displacement resolution.
 
 - These changes make it much more convenient for the user to specify a fixed cantilever spring constant or spring constant range to optimize over. In the long term, this approach should be much more extensible than the previous implementation.
 

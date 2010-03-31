@@ -26,13 +26,38 @@
 </div>
 <p>piezoD is under active development.</p>
 <h1>Revisions</h1>
-<h2>Version 0.3.0</h2>
+<h2>Version 0.3.1</h2>
 <ul>
-<li><p>Added</p>
+<li><p>Moved the goals and constants (e.g. VACUUM = 1) to class variables for tidiness. See 'sample_code&rsquo; for examples.</p>
 </li>
 </ul>
 <ul>
-<li><p>The optimization functions now take in just three arguments: paramater constraints, nonlinear constraints, and the optimization goal. Parameter constraints already existed in previous versions. The nonlinear constraints argument is new: it holds things like power dissipation and resonant frequency. The goal argument is also new: it corresponds to either optimizing for force or displacement resolution.</p>
+<li><p>Rearranged the cantilever print output (both normal and Excel)</p>
+</li>
+</ul>
+<ul>
+<li><p>Added a 'number_of_piezoresistors&rsquo; parameter to specify the number of silicon resistors in the bridge. This only affects the 1/f noise of the bridge.</p>
+</li>
+</ul>
+<ul>
+<li><p>Rewrote the amplifier noise as integrated_amplifier_noise(). Includes the current noise, both Johnson and 1/f, of the amplifiern now. This change favors lower impedance piezoresistors. Assumes that the amplifier is the TI INA103, which is a BJT instrumentation amplifier so has high current noise and low voltage noise.</p>
+</li>
+</ul>
+<ul>
+<li><p>Changed the default gamma value from 0.5 to 0.9. Gamma is the ratio of piezoresistor resistance to total resistance, so this change assumes that you've designed your device with low resistance interconnects.</p>
+</li>
+</ul>
+<ul>
+<li><p>Added resolution_tradeoff_plot(), which shows the achievable tradeoff between force and displacement resolution given the other cantilever constraints.</p>
+</li>
+</ul>
+<ul>
+<li><p>Added default constraints on the L<i>W and W</i>T ratio of the cantilever.</p>
+</li>
+</ul>
+<h2>Version 0.3.0</h2>
+<ul>
+<li><p>The optimization functions now take in just three arguments: parameter constraints, nonlinear constraints, and the optimization goal. Parameter constraints already existed in previous versions. The nonlinear constraints argument is new: it holds things like power dissipation and resonant frequency. The goal argument is also new: it corresponds to either optimizing for force or displacement resolution.</p>
 </li>
 </ul>
 <ul>
@@ -102,17 +127,20 @@ user friendly and reduce barriers to usage.</p>
 </ul>
 <div id="footer">
 <div id="footer-text">
-Page generated 2009-09-13 14:48:15 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2010-03-30 19:58:38 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>
 </tr>
 </table>
-<script src="http://www.google-analytics.com/urchin.js" type="text/javascript">
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
 </script>
 <script type="text/javascript">
-_uacct = "UA-71952-2";
-urchinTracker();
-</script>
+try {
+var pageTracker = _gat._getTracker("UA-11750507-1");
+pageTracker._trackPageview();
+} catch(err) {}</script>
 </body>
 </html>

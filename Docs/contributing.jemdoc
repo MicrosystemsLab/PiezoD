@@ -6,8 +6,7 @@ piezoD uses git for version control. The repository is hosted on GitHub and can 
 Contributions are very welcome. Please report any issues or requests on GitHub. This documentation is also hosted in the GitHub repository, and you are welcome to help in improving it.
 
 Here are a few possible features to add:
-- Python implemtation. Development originally started in [http://www.scipy.org SciPy] but I was never able to get the optimization working.
-- Metal strain gauges. Right now the code is oriented towards silicon piezoresistors.
+- Python implementation. Development originally started in [http://www.scipy.org SciPy] but I was never able to get the optimization working.
+- Metal strain gauges. Right now the code is oriented towards silicon piezoresistors but would be straightforward to extend to other transducer types.
 - TSuprem integration for ion implantation optimization.
 - Comsol integration for finite element analysis of more complex structures.
-- Making other optimization targets (e.g. displacement rather than force) accessible by a simpler, key-value or flag based interface.

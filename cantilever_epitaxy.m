@@ -85,7 +85,7 @@ classdef cantilever_epitaxy < cantilever
                        t_pr_ratio_scale];
         end
         
-        function new_cantilever = cantilever_from_state(self, x0)
+        function self = cantilever_from_state(self, x0)
             scaling = self.optimization_scaling();
             x0 = x0 ./ scaling;
 
@@ -97,9 +97,13 @@ classdef cantilever_epitaxy < cantilever
             dopant_concentration = x0(6);
             t_pr_ratio = x0(7);
             
-            new_cantilever = cantilever_epitaxy(self.freq_min, self.freq_max, ...
-                l, w, t, l_pr_ratio, v_bridge, self.doping_type, ...
-                dopant_concentration, t_pr_ratio);
+            self.l = l;
+            self.w = w;
+            self.t = t;
+            self.l_pr_ratio = l_pr_ratio;
+            self.v_bridge = v_bridge;
+            self.dopant_concentration = dopant_concentration;
+            self.t_pr_ratio = t_pr_ratio;
         end
 
         % Return state vector for the current state
@@ -121,21 +125,21 @@ classdef cantilever_epitaxy < cantilever
         function [lb ub] = optimization_bounds(self, parameter_constraints)
            
             min_l = 1e-6;
-            max_l = 10e-3;
+            max_l = 3e-3;
             
             min_w = 2e-6;
-            max_w = 10e-3;
+            max_w = 1e-3;
             
             min_t = 1e-6;
-            max_t = 10e-3;
+            max_t = 50e-6;
             
             min_l_pr_ratio = 0.01;
             max_l_pr_ratio = 1;
             
             min_v_bridge = 0.1;
-            max_v_bridge = 5;
+            max_v_bridge = 10;
             
-            min_dopant_concentration = 1e15;
+            min_dopant_concentration = 1e16;
             
             % Use solid solubility at 800C
             switch self.doping_type

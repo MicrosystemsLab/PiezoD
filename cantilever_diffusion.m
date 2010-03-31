@@ -27,20 +27,18 @@ classdef cantilever_diffusion < cantilever
 
         function print_performance_for_excel(self)
             fprintf('%s \t', self.doping_type);
-            variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
-                self.l_pr_ratio, self.v_bridge ...
-                self.diffusion_time, self.diffusion_temp, ...
-                self.freq_min, self.freq_max, ...
-                self.force_resolution(), self.displacement_resolution(), ...
-                self.omega_vacuum_hz(), self.omega_damped_hz(), ...
-                self.force_sensitivity(), self.beta(), self.junction_depth()*1e9,  ...
-                self.stiffness(), self.quality_factor(), ...
-                self.resistance(), self.power_dissipation()*1e3, ...
-                self.integrated_noise(), self.integrated_johnson_noise(), ...
-                self.integrated_hooge_noise(), self.knee_frequency()];            
+            variables_to_print = [self.freq_min, self.freq_max*1e-3, ...
+                self.l*1e6, self.w*1e6, self.t*1e6, self.l_pr()*1e6, ...
+                self.diffusion_time/60, self.diffusion_temp-273, ...
+                self.v_bridge, self.resistance()*1e-3, self.sheet_resistance(), self.power_dissipation()*1e3, ...
+                self.force_resolution()*1e12, self.displacement_resolution()*1e9, ...
+                self.omega_vacuum_hz()*1e-3, self.omega_damped_hz()*1e-3, ...
+                self.force_sensitivity(), self.beta(), self.stiffness(), ...
+                self.integrated_noise()*1e6, self.integrated_johnson_noise()*1e6, ...
+                self.integrated_hooge_noise()*1e6, self.knee_frequency()];            
            
             for print_index = 1:length(variables_to_print)
-               fprintf('%g \t', variables_to_print(print_index)); 
+               fprintf('%.2f \t', variables_to_print(print_index)); 
             end
             fprintf('\n');
         end
@@ -70,6 +68,7 @@ classdef cantilever_diffusion < cantilever
                     x = linspace(0, junction_depth, n_points);
 
                     doping = N_surface*erfc(x/(2*diffusion_length));
+
                 case 'boron'
                     D_0 = 1.0;
                     E_a = 3.5;
@@ -89,16 +88,29 @@ classdef cantilever_diffusion < cantilever
                 case 'phosphorus'
                     k_b_eV = 8.617343e-5;
                     x = linspace(0, self.t*1e2, n_points); % m -> cm
-                    Cs = 2.1e20;
-
                     T = self.diffusion_temp;
                     t = self.diffusion_time;
 
-                    alpha = .18*exp(-1.75/k_b_eV/T);
-                    Da = 200*exp(-3.77/k_b_eV/T);
-                    Db = 1.2*exp(-3/k_b_eV/T);
-                    Cb = 3.5*exp(-0.9/k_b_eV/T)*1e23;
+                    % Temperature dependent solid solubility for phosphorus
+                    % from the Trumbore data included in the TSuprem manual
+                    SS_temp = [650 700 800 900 1000 1100] + 273; %K
+                    SS_conc = [1.2e20 1.2e20 2.9e20 6e20 1e21 1.2e21]; % N/cc
+                    p = polyfit(SS_temp, SS_conc, 2);
+                    fit_line = polyval(p, SS_temp);
+                    Cs = polyval(p, T)*.5;
+                    
 
+%                     alpha = .18*exp(-1.75/k_b_eV/T);
+%                     Da = 200*exp(-3.77/k_b_eV/T);
+%                     Db = 1.2*exp(-3/k_b_eV/T);
+%                     Cb = 3.5*exp(-0.9/k_b_eV/T)*1e23;
+
+                    alpha = 6e2*exp(-2.45/k_b_eV/T);
+                    Da = 100*exp(-3.77/k_b_eV/T);
+                    Db = .8*exp(-3/k_b_eV/T);
+                    Cb = 1.5*exp(-0.9/k_b_eV/T)*1e23;
+                    
+                    
                     x0 = alpha*t;
                     kappa = Cb/Cs;
 
@@ -197,11 +209,11 @@ classdef cantilever_diffusion < cantilever
             min_v_bridge = 0.1;
             max_v_bridge = 5;
             
-            min_diffusion_time = 5*60; % seconds
+            min_diffusion_time = 10*60; % seconds
             max_diffusion_time = 60*60;
             
             min_diffusion_temp = 273+800; % K
-            max_diffusion_temp = 273+900;
+            max_diffusion_temp = 273+1000;
             
             % Override the default values if any were provided
             % constraints is a set of key value pairs, e.g.
