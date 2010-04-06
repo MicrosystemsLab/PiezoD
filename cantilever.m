@@ -85,16 +85,18 @@ classdef cantilever
         freq_max; % Hertz
 
         alpha = 1e-5; % unitless
-        T = 300; % kelvin
-        k_b = 1.38e-23; % J/K
-        k_b_eV = 8.617343e-5; % eV/K
-        q = 1.60218e-19; % Coulombs
 
         doping_type = 'boron'; % default value = boron
     end
     
     % Can be referred to with cantilever.variableName
     properties (Constant)
+        T = 300; % kelvin
+        k_b = 1.38e-23; % J/K
+        k_b_eV = 8.617343e-5; % eV/K
+        q = 1.60218e-19; % Coulombs
+
+        
         colorBlue = [11/255 132/255 199/255];
         colorOrange = [255/255 102/255 0/255];
         colorGreen = [0/255 153/255 0/255];
@@ -364,17 +366,14 @@ classdef cantilever
         end
 
         function plot_noise_spectrum(self)
-            frequency = logspace(log10(self.freq_min), log10(self.freq_max), 1e4);
+            frequency = logspace(log10(self.freq_min), log10(self.freq_max), 1e3);
             noise = self.voltage_noise(frequency);
-            axis equal;
 
             plot(frequency, noise, 'LineWidth', 2);
             set(gca, 'xscale','log', 'yscale','log');
             set(gca, 'LineWidth', 1.5, 'FontSize', 14);
             ylabel('Noise Voltage Spectral Density (V/rtHz)', 'FontSize', 16);
             xlabel('Frequency (Hz)', 'FontSize', 16);
-            
-            
         end
         
         function f_min_cumulative = f_min_cumulative(self)
@@ -392,11 +391,23 @@ classdef cantilever
 
 
         % Piezoresistance factor
-        % Following Jonah Harley's calculation based upon experimental data
+        % Accounts for dopant concentration dependent piezoresistivity in silicon
         function piezoresistance_factor = piezoresistance_factor(self, dopant_concentration)
-            b = 1.53e22;
-            a = 0.2014;
-            piezoresistance_factor = log10((b./dopant_concentration) .^ a);
+            
+%             % Harley empircal fit (deprecated)
+%             b = 1.53e22;
+%             a = 0.2014;
+%             piezoresistance_factor = log10((b./dopant_concentration) .^ a);
+            
+            % Richter's model (T=300K)
+            % "Piezoresistance in p-type silicon revisited"
+            Nb = 6e19;
+            Nc = 7e20;
+            richter_alpha = 0.43;
+            richter_gamma = 1.6;
+            piezoresistance_factor = (1 + (dopant_concentration/Nb).^richter_alpha ...
+                + (dopant_concentration/Nc).^richter_gamma).^-1;
+            
         end
 
         function max_factor = max_piezoresistance_factor(self)
