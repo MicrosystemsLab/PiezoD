@@ -76,6 +76,7 @@ classdef cantilever
 
         v_bridge; % Volts
         number_of_piezoresistors = 2;
+        rms_actuator_displacement_noise = 1e-9; % m
         
         rho_cantilever = 2330;
         rho_fluid = 1e3;
@@ -171,11 +172,11 @@ classdef cantilever
             fprintf('Beta %g \n', self.beta())
             fprintf('\n')
             fprintf('Integrated noise (V): %g \n', self.integrated_noise())
-            fprintf('Integrated johnson noise (V): %g \n', self.integrated_johnson_noise())
-            fprintf('Integrated 1/f noise (V): %g \n', self.integrated_hooge_noise())
-            fprintf('Amplifier noise (V): %g \n', self.integrated_amplifier_noise())
+            fprintf('Integrated johnson noise (V): %g \n', self.johnson_integrated())
+            fprintf('Integrated 1/f noise (V): %g \n', self.hooge_integrated())
+            fprintf('Amplifier noise (V): %g \n', self.amplifier_integrated())
             fprintf('Knee frequency (Hz): %g \n', self.knee_frequency())
-            fprintf('Johnson/Hooge: %g \n', self.integrated_johnson_noise()/self.integrated_hooge_noise())
+            fprintf('Johnson/Hooge: %g \n', self.johnson_integrated()/self.hooge_integrated())
             fprintf('\n')
             fprintf('Sheet Resistance: %g \n', self.sheet_resistance())
 
@@ -302,84 +303,116 @@ classdef cantilever
             number_of_carriers = Nz*self.resistor_length()*self.w_pr();
         end
 
-        % 1/f noise density from the entire Wheatstone bridge
-        % Assuming two piezoresistors (with 1/f noise) and two w/o 1/f
-        % noise, so the 1/f noise density is sqrt(2) larger
-        % Units: V
-        function hooge_noise_density = hooge_noise_density(self)
-            hooge_noise_density = sqrt(self.number_of_piezoresistors)/2*sqrt(self.alpha*self.v_bridge^2/self.number_of_carriers());
+        % 1/f voltage power spectral density for the entire Wheatstone bridge
+        % Units: V^2/Hz
+        function hooge_PSD = hooge_PSD(self, freq)
+            hooge_PSD = self.alpha*self.v_bridge^2*self.number_of_piezoresistors./(4*self.number_of_carriers()*freq);
         end
-
+        
         % Integrated 1/f noise density for the entire Wheatstone bridge
         % Unit: V
-        function integrated_hooge_noise = integrated_hooge_noise(self)
-            integrated_hooge_noise = self.hooge_noise_density() * sqrt(log(self.freq_max / self.freq_min));
+        function hooge_integrated = hooge_integrated(self)
+            freq = logspace( log10(self.freq_min), log10(self.freq_max), 1e4);
+            hooge_integrated = sqrt(trapz(freq, self.hooge_PSD(freq)));
+        end
+        
+        % Johnson noise PSD from the entire Wheatstone bridge. Equal to that of a single resistor
+        % assuming that all four resistors are equal.
+        % Units: V^2/Hz
+        function johnson_PSD = johnson_PSD(self, freq)
+            johnson_PSD = 4*self.k_b*self.T*self.resistance() * ones(1, length(freq));
         end
 
-        % Johnson noise density from the entire Wheatstone bridge
-        % Assuming four resistors each equal to R, so the Johnson noise
-        % density is the same as for a single resistor R
-        % Units: V/rtHz
-        function johnson_noise_density = johnson_noise_density(self)
-            johnson_noise_density = sqrt(4 * self.k_b * self.T * self.resistance());
-        end
-
-        % Integrated Johnson noise from the entire Wheatstone bridge
+        % Integrated Johnson noise
         % Unit: V
-        function integrated_johnson_noise = integrated_johnson_noise(self)
-            integrated_johnson_noise = self.johnson_noise_density()*sqrt(self.freq_max - self.freq_min);
+        function johnson_integrated = johnson_integrated(self)
+            freq = logspace( log10(self.freq_min), log10(self.freq_max), 1e4);
+            johnson_integrated = sqrt(trapz(freq, self.johnson_PSD(freq)));
+        end
+        
+        % Thermomechanical noise PSD
+        % Units: V^2/Hz
+        function thermo_PSD = thermo_PSD(self, freq)
+            Q_M = 100; % quality factor
+            thermo_PSD = (self.force_sensitivity())^2 * 2*self.stiffness()*self.k_b*self.T/(pi*self.omega_vacuum_hz()*Q_M) * ones(1, length(freq));
         end
 
-        % Assume INA103 type performance
-        function integrated_amplifier_noise = integrated_amplifier_noise(self)
-            
-            % Additional sqrt(2) prefactor because there are two amplifier inputs
-            Vamp_J = 1.2e-9*sqrt(2)*sqrt(self.freq_max - self.freq_min); % 1.8 nV/rtHz
-            Vamp_H = 4e-9 *sqrt(2)*sqrt(log(self.freq_max/self.freq_min)); % 10 nV/rtHz @ 1Hz, 3.3 (sqrt of 10) nV/rtHz @ 10Hz
-            Iamp_J = 2e-12 *sqrt(2)*sqrt(self.freq_max - self.freq_min);  % 2pA/rtHz
-            Iamp_H = 25e-12*sqrt(2)*sqrt(log(self.freq_max/self.freq_min)); % 25 pA/rtHz @ 1Hz
+        % Integrated Johnson noise
+        % Unit: V
+        function thermo_integrated = thermo_integrated(self)
+            freq = logspace( log10(self.freq_min), log10(self.freq_max), 1e4);
+            thermo_integrated = sqrt(trapz(freq, self.thermo_PSD(freq)));
+        end
+        
+        % Accounts for the noise of the actuator that the cantilever is mounted on
+        % Units: V
+        function actuator_noise_integrated = actuator_noise_integrated(self)
+            actuator_noise_integrated = self.rms_actuator_displacement_noise*self.stiffness()*self.force_sensitivity(); % V
+        end
+        
+
+        % Amplifier noise PSD
+        % Units: V^2/Hz        
+        function amplifier_PSD = amplifier_PSD(self, freq)
+            A_VJ = 1.2e-9; % 1.2 nV/rtHz noise floor
+            A_IJ = 2e-12; % 2 pA/rtHz noise floor
+            A_VF = 6e-9; % 6 nV/rtHz @ 1 Hz
+            A_IF = 25e-12; % 25 pA/rtHz @ 1 Hz
             
             R_effective = self.resistance()/2; % resistance seen by amplifier inputs
-            
-            integrated_amplifier_noise = sqrt(Vamp_J^2 + Vamp_H^2 + (R_effective*Iamp_J)^2 + (R_effective*Iamp_H)^2);
+            amplifier_PSD = (A_VJ^2 + 2*(R_effective*A_IJ)^2) + (A_VF^2 + 2*(R_effective*A_IF)^2)./freq;
         end
 
-        % Calculate the knee frequency
-        % Equating 1/f noise and johnson... sqrt(alpha*V_bridge^2/(2*N*f_knee)) = sqrt(4*kb*T*R)
-        % Leads to f_knee = alpha*V_bridge^2/(2*N*S_j^2)
+        % Integrated amplifier noise
+        % Units: V        
+        function amplifier_integrated = amplifier_integrated(self)
+            freq = logspace( log10(self.freq_min), log10(self.freq_max), 1e4);
+            amplifier_integrated = sqrt(trapz(freq, self.amplifier_PSD(freq)));
+        end
+        
+        % Calculate the knee frequency (equating the Hooge and Johnson noise)
+        % Equating 1/f noise and johnson... numPRS*alpha*V_bridge^2/(4*N*f_knee) = 4*kb*T*R
+        % Leads to f_knee = alpha*V_bridge^2/(16*N*S_j^2)
+        % Units: Hz
         function knee_frequency = knee_frequency(self)
-            knee_frequency = self.alpha*self.v_bridge^2/(2*self.number_of_carriers()*self.johnson_noise_density()^2);
+            knee_frequency = self.number_of_piezoresistors*self.alpha*self.v_bridge^2/(16*self.number_of_carriers()*self.k_b*self.T*self.resistance());
         end
 
         % Integrated cantilever noise for given bandwidth
-        % Source are uncorrelated so they add in RMS
-        % Units: V = sqrt(V^2 + V^2 + ..)
+        % Units: V
         function integrated_noise = integrated_noise(self)
-            integrated_noise = sqrt(self.integrated_johnson_noise()^2 + self.integrated_hooge_noise()^2 + self.integrated_amplifier_noise()^2);
+            freq = logspace( log10(self.freq_min), log10(self.freq_max), 1e2);
+            integrated_noise = sqrt(self.actuator_noise_integrated()^2 + trapz(freq, self.johnson_PSD(freq) + self.hooge_PSD(freq) + self.thermo_PSD(freq) + self.amplifier_PSD(freq)));
         end
 
         % Calculate the noise in V/rtHz at a given frequency
-        function voltage_noise = voltage_noise(self, frequency)
-            hooge_noise = self.hooge_noise_density()./sqrt(frequency); % V/rtHz
-            johnson_noise = self.johnson_noise_density(); % V/rtHz
-            voltage_noise = sqrt(hooge_noise.^2 + johnson_noise^2 );
+        function voltage_noise = voltage_noise(self, freq)
+            voltage_noise = sqrt(self.johnson_PSD(freq) + self.hooge_PSD(freq) + self.thermo_PSD(freq) + self.amplifier_PSD(freq));
         end
 
         function plot_noise_spectrum(self)
-            frequency = logspace(log10(self.freq_min), log10(self.freq_max), 1e3);
-            noise = self.voltage_noise(frequency);
+            freq = logspace( log10(self.freq_min), log10(self.freq_max), 1e4);
+            noise = self.voltage_noise(freq);
 
-            plot(frequency, noise, 'LineWidth', 2);
+            figure
+            hold all
+            plot(freq, sqrt(self.johnson_PSD(freq)), 'LineWidth', 2);
+            plot(freq, sqrt(self.hooge_PSD(freq)), 'LineWidth', 2);
+            plot(freq, sqrt(self.thermo_PSD(freq)), 'LineWidth', 2);
+            plot(freq, sqrt(self.amplifier_PSD(freq)), 'LineWidth', 2);
+            plot(freq, self.voltage_noise(freq), 'LineWidth', 2);
+            hold off
             set(gca, 'xscale','log', 'yscale','log');
             set(gca, 'LineWidth', 1.5, 'FontSize', 14);
             ylabel('Noise Voltage Spectral Density (V/rtHz)', 'FontSize', 16);
             xlabel('Frequency (Hz)', 'FontSize', 16);
+            legend('Johnson', 'Hooge', 'Thermo', 'Amp', 'Total')
         end
         
         function f_min_cumulative = f_min_cumulative(self)
             frequency = logspace(log10(self.freq_min), log10(self.freq_max), 1e4);
-            noise = self.voltage_noise(frequency)
-            sensitivity = self.cPR.force_sensitivity();
+            noise = self.voltage_noise(frequency);
+            sensitivity = self.force_sensitivity();
             force_noise_density = noise./sensitivity;
             f_min_cumulative = sqrt(cumtrapz(frequency, force_noise_density.^2));
         end
@@ -393,11 +426,6 @@ classdef cantilever
         % Piezoresistance factor
         % Accounts for dopant concentration dependent piezoresistivity in silicon
         function piezoresistance_factor = piezoresistance_factor(self, dopant_concentration)
-            
-%             % Harley empircal fit (deprecated)
-%             b = 1.53e22;
-%             a = 0.2014;
-%             piezoresistance_factor = log10((b./dopant_concentration) .^ a);
             
             % Richter's model (T=300K)
             % "Piezoresistance in p-type silicon revisited"
@@ -762,7 +790,7 @@ classdef cantilever
 
             % Silicon: L/W > 10, W/T > 3
             length_width_ratio = 5 - c_new.l/c_new.w;
-            width_thickness_ratio = 2 - c_new.w/c_new.t;
+            width_thickness_ratio = 5 - c_new.w/c_new.t;
             C = [C length_width_ratio width_thickness_ratio];
 
             % PR: L/W > 5
@@ -794,40 +822,59 @@ classdef cantilever
         % make sure that it converges repeatedly.
         function optimized_cantilever = optimize_performance(self, parameter_constraints, nonlinear_constraints, goal)
 
-            n = 3; % the number of trials we want to try
-            percent_match = 0.01;
+            percent_match = 0.02; % 2 percent
             randomize_starting_conditions = 1;
-            
-            for ii = 1:n
-                c{ii} = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
+
+            converged = 0;
+            ii = 1;
+            while ~converged
+                % Optimize another cantilever
+                [c{ii}, exitflag] = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
                 
-                if goal == cantilever.goalForceResolution
-                    resolution(ii) = c{ii}.force_resolution();
-                elseif goal == cantilever.goalDisplacementResolution
-                    resolution(ii) = c{ii}.displacement_resolution();
+                % If the optimization terminated abnormally (e.g. constraints not satisfied), skip to the next iteration
+                if ~(exitflag == 1 || exitflag == 2)
+                    continue
                 end
+                exitflags(ii) = exitflag;
+                
+                % Find the resolutions for the cantilevers made so far
+                for jj = 1:ii
+                    if goal == cantilever.goalForceResolution
+                        resolution(jj) = c{jj}.force_resolution();
+                    elseif goal == cantilever.goalDisplacementResolution
+                        resolution(jj) = c{jj}.displacement_resolution();
+                    end
+                end
+                
+                % If we have more than one result, consider stopping
+                if ii > 1
+                    % Sort from smallest to largest, check if the two smallest values agree
+                    [resolution, sortIndex] = sort(resolution);
+                    fprintf('Resolutions so far: %s\n', mat2str(resolution, 3))
+                    resultsAgree = abs(1 - resolution(1)/resolution(2)) < percent_match;
+                    
+                    % If the results agree, then stop the loop. Otherwise, continue
+                    if resultsAgree
+                        fprintf('CONVERGED. Two best values: %s\n', mat2str(resolution(1:2), 3))
+                        optimized_cantilever = c{sortIndex(1)};
+                        converged = 1;
+                    else
+                        fprintf('NOT CONVERGED. Two best values: %s\n', mat2str(resolution(1:2), 3))
+                    end
+                end
+                
+                % Increment, saving the last calculated value - otherwise we might get stuck
+                ii = ii + 1;
             end
-
-            best_index = find(resolution == min(resolution));
-            optimized_cantilever = c{best_index};
-
-            % Output the results
-            min_resolution = min(resolution);
-            max_resolution = max(resolution);
-
-            if (1 - min_resolution/max_resolution) > percent_match
-                fprintf(['Optimization did not converge at least once. Values = ' num2str(resolution) '\n'])
-            end
-            fprintf(['Optimization converged. Values = ' num2str(resolution) '\n'])
         end
 
         % Optimize, but don't randomize starting point
         function optimized_cantilever = optimize_performance_from_current(self, parameter_constraints, nonlinear_constraints, goal)
             randomize_starting_conditions = 0;
-            optimized_cantilever = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
+            [optimized_cantilever, exitflag] = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
         end
 
-        function optimized_cantilever = optimize_performance_once(self, parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions)
+        function [optimized_cantilever, exitflag] = optimize_performance_once(self, parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions)
 
             scaling = self.optimization_scaling();
            
@@ -849,11 +896,11 @@ classdef cantilever
             problem.lb = scaling.*lb;
             problem.ub = scaling.*ub;
 
-            problem.options.TolFun = 1e-12;
-            problem.options.TolCon = 1e-12;
-            problem.options.TolX = 1e-12;
+            problem.options.TolFun = 1e-10;
+            problem.options.TolCon = 1e-10;
+            problem.options.TolX = 1e-10;
 
-            problem.options.MaxFunEvals = 5000;
+            problem.options.MaxFunEvals = 2000;
             problem.options.MaxIter = 1000;
             problem.options.Display = 'iter';
 
@@ -864,7 +911,7 @@ classdef cantilever
             
             problem.nonlcon = @(x) self.optimization_constraints(x, nonlinear_constraints);
 
-            x = fmincon(problem);
+            [x, fval, exitflag] = fmincon(problem);
             optimized_cantilever = self.cantilever_from_state(x);
         end
     end

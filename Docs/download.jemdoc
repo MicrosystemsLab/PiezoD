@@ -15,4 +15,6 @@ piezoD requires Matlab R2008a or later and the optimization toolbox. Object orie
 
 Installation is just a matter of placing *cantilever.m*, *cantilever_diffusion.m* and *cantilever_epitaxy.m* in your Matlab path. You can check that it works by running *sample_code.m*.
 
+Please request any new features and report bugs [http://github.com/jcdoll/PiezoD/issues here].
+
 *Important:* if piezoD seems to be running slowly, try running /clear/ twice before running it again. The origins of this bug are unclear.

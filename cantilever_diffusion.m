@@ -34,8 +34,8 @@ classdef cantilever_diffusion < cantilever
                 self.force_resolution()*1e12, self.displacement_resolution()*1e9, ...
                 self.omega_vacuum_hz()*1e-3, self.omega_damped_hz()*1e-3, ...
                 self.force_sensitivity(), self.beta(), self.stiffness(), ...
-                self.integrated_noise()*1e6, self.integrated_johnson_noise()*1e6, ...
-                self.integrated_hooge_noise()*1e6, self.knee_frequency()];            
+                self.integrated_noise()*1e6, self.johnson_integrated()*1e6, ...
+                self.hooge_integrated()*1e6, self.knee_frequency()];            
            
             for print_index = 1:length(variables_to_print)
                fprintf('%.2f \t', variables_to_print(print_index)); 
@@ -195,19 +195,19 @@ classdef cantilever_diffusion < cantilever
         % are applied in optimization_constraints()
         function [lb ub] = optimization_bounds(self, parameter_constraints)
             min_l = 1e-6;
-            max_l = 10e-3;
+            max_l = 1e-3;
             
             min_w = 2e-6;
-            max_w = 10e-3;
+            max_w = 100e-6;
             
             min_t = 1e-6;
-            max_t = 10e-3;
+            max_t = 50e-6;
             
             min_l_pr_ratio = 0.01;
             max_l_pr_ratio = 1;
             
             min_v_bridge = 0.1;
-            max_v_bridge = 5;
+            max_v_bridge = 10;
             
             min_diffusion_time = 10*60; % seconds
             max_diffusion_time = 60*60;

@@ -41,8 +41,8 @@ classdef cantilever_epitaxy < cantilever
                 self.force_sensitivity(), self.beta(), self.junction_depth()*1e9,  ...
                 self.stiffness(), self.quality_factor(), ...
                 self.resistance(), self.power_dissipation()*1e3, ...
-                self.integrated_noise(), self.integrated_johnson_noise(), ...
-                self.integrated_hooge_noise(), self.knee_frequency()];            
+                self.integrated_noise(), self.johnson_integrated(), ...
+                self.hooge_integrated(), self.knee_frequency()];            
            
             for print_index = 1:length(variables_to_print)
                fprintf('%g \t', variables_to_print(print_index)); 
@@ -124,11 +124,11 @@ classdef cantilever_epitaxy < cantilever
         % are applied in optimization_constraints()
         function [lb ub] = optimization_bounds(self, parameter_constraints)
            
-            min_l = 1e-6;
-            max_l = 3e-3;
+            min_l = 20e-6;
+            max_l = 1e-3;
             
-            min_w = 2e-6;
-            max_w = 1e-3;
+            min_w = 5e-6;
+            max_w = 100e-6;
             
             min_t = 1e-6;
             max_t = 50e-6;
@@ -205,7 +205,7 @@ classdef cantilever_epitaxy < cantilever
 
             l_pr_ratio = l_pr_ratio_min + rand*(l_pr_ratio_max - l_pr_ratio_min);
 
-            v_bridge = V_b_min + rand*(V_b_max - V_b_min);
+            v_bridge = V_b_min + rand*(V_b_max - V_b_min); % Start with the minimum possible V_bridge
             dopant_concentration = 10^(log10(n_min) + rand*(log10(n_max) - log10(n_min))); % logarithmically distributed
 
             t_pr_ratio = t_pr_ratio_min + rand*(t_pr_ratio_max - t_pr_ratio_min);
