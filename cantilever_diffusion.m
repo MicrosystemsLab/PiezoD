@@ -6,12 +6,10 @@ classdef cantilever_diffusion < cantilever
     
     methods
         % Call superclass constructor
-        function self = cantilever_diffusion(freq_min, freq_max, ...
-                l, w, t, l_pr_ratio, v_bridge, doping_type, ...
+        function self = cantilever_diffusion(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type, ...
                 diffusion_time, diffusion_temp)
 
-            self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, ...
-                v_bridge, doping_type);
+            self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type);
                 
             self.diffusion_time = diffusion_time;
             self.diffusion_temp = diffusion_temp;
@@ -30,15 +28,17 @@ classdef cantilever_diffusion < cantilever
             variables_to_print = [self.freq_min, self.freq_max*1e-3, ...
                 self.l*1e6, self.w*1e6, self.t*1e6, self.l_pr()*1e6, ...
                 self.diffusion_time/60, self.diffusion_temp-273, ...
-                self.v_bridge, self.resistance()*1e-3, self.sheet_resistance(), self.power_dissipation()*1e3, ...
+                self.v_bridge, self.resistance()*1e-3, self.sheet_resistance(), self.power_dissipation()*1e3, self.approxTipDeltaTemp(), ...
+                self.number_of_piezoresistors, ...
                 self.force_resolution()*1e12, self.displacement_resolution()*1e9, ...
                 self.omega_vacuum_hz()*1e-3, self.omega_damped_hz()*1e-3, ...
-                self.force_sensitivity(), self.beta(), self.stiffness(), ...
+                self.force_sensitivity(), self.beta(), self.stiffness()*1e3, ...
                 self.integrated_noise()*1e6, self.johnson_integrated()*1e6, ...
-                self.hooge_integrated()*1e6, self.knee_frequency()];            
+                self.hooge_integrated()*1e6, self.amplifier_integrated()*1e6, ...
+                self.knee_frequency(), self.number_of_carriers()];            
            
             for print_index = 1:length(variables_to_print)
-               fprintf('%.2f \t', variables_to_print(print_index)); 
+               fprintf('%4g\t', variables_to_print(print_index)); 
             end
             fprintf('\n');
         end
@@ -53,7 +53,7 @@ classdef cantilever_diffusion < cantilever
         function [x, doping] = doping_profile(self)
             N_background = 1e14; % N/cm^3
             N_surface = 1e20; % N/cm^3
-            n_points = 1000; % # of points of doping profile
+            n_points = 10e2; % # of points of doping profile
             
             switch self.doping_type
                 case 'arsenic'
@@ -94,10 +94,18 @@ classdef cantilever_diffusion < cantilever
                     % Temperature dependent solid solubility for phosphorus
                     % from the Trumbore data included in the TSuprem manual
                     SS_temp = [650 700 800 900 1000 1100] + 273; %K
-                    SS_conc = [1.2e20 1.2e20 2.9e20 6e20 1e21 1.2e21]; % N/cc
-                    p = polyfit(SS_temp, SS_conc, 2);
-                    fit_line = polyval(p, SS_temp);
-                    Cs = polyval(p, T)*.5;
+                    SS_phos = [1.2e20 1.2e20 2.9e20 6e20 1e21 1.2e21]; % N/cc
+                    SS_phosfit = polyfit(SS_temp, SS_phos, 2);
+                    
+                    % % For debuggin the fit
+                    % figure
+                    % hold all
+                    % plot(SS_temp, SS_phos, 'o');
+                    % plot(SS_temp, polyval(SS_phosfit, SS_temp));
+                    % hold off
+                    % pause
+
+                    Cs = polyval(SS_phosfit, T)*.5; % factor of 1/2 to fit experimentally observed data
                     
 
 %                     alpha = .18*exp(-1.75/k_b_eV/T);
@@ -109,7 +117,6 @@ classdef cantilever_diffusion < cantilever
                     Da = 100*exp(-3.77/k_b_eV/T);
                     Db = .8*exp(-3/k_b_eV/T);
                     Cb = 1.5*exp(-0.9/k_b_eV/T)*1e23;
-                    
                     
                     x0 = alpha*t;
                     kappa = Cb/Cs;
@@ -157,24 +164,25 @@ classdef cantilever_diffusion < cantilever
                        diffusion_temp_scale];
         end
         
-        function new_cantilever = cantilever_from_state(self, x0)
+        function self = cantilever_from_state(self, x0)
             scaling = self.optimization_scaling();
             x0 = x0 ./ scaling;
 
             l = x0(1);
             w = x0(2);
             t = x0(3);
-
             l_pr_ratio = x0(4);
-            
             v_bridge = x0(5);
-            
             diffusion_time = x0(6);
             diffusion_temp = x0(7);
             
-            new_cantilever = cantilever_diffusion(self.freq_min, self.freq_max, ...
-                l, w, t, l_pr_ratio, v_bridge, self.doping_type, ...
-                diffusion_time, diffusion_temp);
+            self.l = l;
+            self.w = w;
+            self.t = t;
+            self.l_pr_ratio = l_pr_ratio;
+            self.v_bridge = v_bridge;
+            self.diffusion_time = diffusion_time;
+            self.diffusion_temp = diffusion_temp;
         end
         
         % Return state vector for the current state

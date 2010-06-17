@@ -5,14 +5,8 @@ classdef cantilever_epitaxy < cantilever
     end
 
     methods
-        % Call superclass constructor
-        function self = cantilever_epitaxy(freq_min, freq_max, l, w, t, l_pr_ratio, ...
-                v_bridge, doping_type, ...
-                dopant_concentration, t_pr_ratio)
-
-            self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, ...
-                v_bridge, doping_type);
-                
+        function self = cantilever_epitaxy(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type, dopant_concentration, t_pr_ratio)
+            self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type); % Call superclass constructor
             self.dopant_concentration = dopant_concentration;
             self.t_pr_ratio = t_pr_ratio;
         end
@@ -31,33 +25,33 @@ classdef cantilever_epitaxy < cantilever
         
         
         function print_performance_for_excel(self)
-            fprintf('%s \t', self.doping_type);
-            variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
+            fprintf('%s\t', self.doping_type);
+            variables_to_print = [self.freq_min, self.freq_max*1e-3, ...
+                self.l*1e6, self.w*1e6, self.t*1e6, ...
+                self.l_pr()*1e6, self.junction_depth()*1e9, ...
                 self.l_pr_ratio, self.t_pr_ratio, ...
-                self.v_bridge, self.dopant_concentration, ...
-                self.freq_min, self.freq_max, ...
-                self.force_resolution(), self.displacement_resolution(), ...
-                self.omega_vacuum_hz(), self.omega_damped_hz(), ...
-                self.force_sensitivity(), self.beta(), self.junction_depth()*1e9,  ...
-                self.stiffness(), self.quality_factor(), ...
-                self.resistance(), self.power_dissipation()*1e3, ...
-                self.integrated_noise(), self.johnson_integrated(), ...
-                self.hooge_integrated(), self.knee_frequency()];            
+                self.v_bridge, self.resistance()*1e-3, self.sheet_resistance(), self.power_dissipation()*1e3, self.approxTipDeltaTemp(), ...
+                self.number_of_piezoresistors, ...
+                self.force_resolution()*1e12, self.displacement_resolution()*1e9, ...
+                self.omega_vacuum_hz()*1e-3, self.omega_damped_hz()*1e-3, ...
+                self.force_sensitivity(), self.beta(), self.stiffness()*1e3, ...
+                self.integrated_noise()*1e6, self.johnson_integrated()*1e6, ...
+                self.hooge_integrated()*1e6, self.amplifier_integrated()*1e6, ...
+                self.knee_frequency(), self.number_of_carriers()];            
            
             for print_index = 1:length(variables_to_print)
-               fprintf('%g \t', variables_to_print(print_index)); 
+               fprintf('%4g\t', variables_to_print(print_index)); 
             end
             fprintf('\n');
-        end        
-            
+        end
+                    
         % ==================================
         % ======== Doping Profile  =========
         % ==================================        
         
         % Return the diffusion profile down to the junction depth
         function [x, doping] = doping_profile(self)
-            n_points = 1000; % # of points of doping profile
-            
+            n_points = 5e2; % # of points of doping profile
             x = linspace(0, self.junction_depth(), n_points);
             doping = ones(1, n_points)*self.dopant_concentration;
         end
@@ -71,18 +65,11 @@ classdef cantilever_epitaxy < cantilever
             l_scale = 1e6;
             w_scale = 1e6;
             t_scale = 1e9;
-            l_pr_ratio_scale = 1;
+            l_pr_ratio_scale = 10;
             v_bridge_scale = 1;
-            dopant_concentration = 1e-19;
-            t_pr_ratio_scale = 1;
-            
-            scaling = [l_scale ...
-                       w_scale ...
-                       t_scale ...
-                       l_pr_ratio_scale ...
-                       v_bridge_scale ...
-                       dopant_concentration, ...
-                       t_pr_ratio_scale];
+            concentration_scale = 1e-18;
+            t_pr_ratio_scale = 10;
+            scaling = [l_scale, w_scale, t_scale, l_pr_ratio_scale, v_bridge_scale, concentration_scale, t_pr_ratio_scale];
         end
         
         function self = cantilever_from_state(self, x0)
@@ -124,22 +111,22 @@ classdef cantilever_epitaxy < cantilever
         % are applied in optimization_constraints()
         function [lb ub] = optimization_bounds(self, parameter_constraints)
            
-            min_l = 20e-6;
-            max_l = 1e-3;
+            min_l = 10e-6;
+            max_l = 10e-3;
             
-            min_w = 5e-6;
-            max_w = 100e-6;
+            min_w = 1e-6;
+            max_w = 500e-6;
             
             min_t = 1e-6;
-            max_t = 50e-6;
+            max_t = 100e-6;
             
             min_l_pr_ratio = 0.01;
-            max_l_pr_ratio = 1;
+            max_l_pr_ratio = 0.99;
             
             min_v_bridge = 0.1;
             max_v_bridge = 10;
             
-            min_dopant_concentration = 1e16;
+            min_dopant_concentration = 1e17;
             
             % Use solid solubility at 800C
             switch self.doping_type
@@ -165,10 +152,8 @@ classdef cantilever_epitaxy < cantilever
                 end
             end
             
-            lb = [min_l, min_w, min_t, min_l_pr_ratio, min_v_bridge, ...
-                min_dopant_concentration, min_t_pr_ratio];
-            ub = [max_l, max_w, max_t, max_l_pr_ratio, max_v_bridge, ...
-                max_dopant_concentration, max_t_pr_ratio];
+            lb = [min_l, min_w, min_t, min_l_pr_ratio, min_v_bridge, min_dopant_concentration, min_t_pr_ratio];
+            ub = [max_l, max_w, max_t, max_l_pr_ratio, max_v_bridge, max_dopant_concentration, max_t_pr_ratio];
         end
         
         function x0 = initial_conditions_random(self, parameter_constraints)
@@ -202,12 +187,9 @@ classdef cantilever_epitaxy < cantilever
             l = l_min + rand*(l_max - l_min);
             w = w_min + rand*(w_max - w_min);
             t = t_min + rand*(t_max - t_min);
-
             l_pr_ratio = l_pr_ratio_min + rand*(l_pr_ratio_max - l_pr_ratio_min);
-
-            v_bridge = V_b_min + rand*(V_b_max - V_b_min); % Start with the minimum possible V_bridge
+            v_bridge = V_b_min + rand*(V_b_max - V_b_min);
             dopant_concentration = 10^(log10(n_min) + rand*(log10(n_max) - log10(n_min))); % logarithmically distributed
-
             t_pr_ratio = t_pr_ratio_min + rand*(t_pr_ratio_max - t_pr_ratio_min);
 
             x0 = [l, w, t, l_pr_ratio, v_bridge, dopant_concentration, t_pr_ratio];
