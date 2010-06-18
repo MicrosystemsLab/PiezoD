@@ -126,12 +126,18 @@ c_epitaxy.print_performance()
 c_epitaxy.print_performance_for_excel()
 ~~~
 
+You can change the operating environment of the cantilever by setting the fluid variable. The default value is 'air'.
+
+~~~
+{}{}
+c_epitaxy.fluid = 'water';
+~~~
+
 The cantilever already has decent performance, but we could do much better by optimizing the cantilever design. In order to optimize the design we need to provide a few constraints on the design variable limitations.
 
 ~~~
 {}{}
 omega_min_hz = 5*freq_max;
-fluid_type = 'vacuum';
 max_power = 2e-3;
 
 constraints = {{'min_t', 'min_w', 'max_v_bridge'}, {1e-6, 4e-6, 10}};
@@ -145,7 +151,7 @@ Let's do the optimization.
 
 ~~~
 {}{}
-c_epitaxy = c_epitaxy.optimize_performance_from_current(max_power, omega_min_hz, fluid_type, constraints);
+c_epitaxy = c_epitaxy.optimize_performance_from_current(max_power, omega_min_hz, constraints);
 ~~~
 
 And we can check the new performance.

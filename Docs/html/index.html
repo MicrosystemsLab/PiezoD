@@ -5,7 +5,7 @@
 <meta name="generator" content="jemdoc, see http://jemdoc.jaboc.net/" />
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <link rel="stylesheet" href="jemdoc.css" type="text/css" />
-<title>piezoD - piezoresistive cantilever design optimization</title>
+<title>piezoD - piezoresistive and piezoelectric cantilever design optimization</title>
 </head>
 <body>
 <table summary="Table for page layout." id="tlayout">
@@ -22,14 +22,16 @@
 </td>
 <td id="layout-content">
 <div id="toptitle">
-<h1>piezoD - piezoresistive cantilever design optimization</h1>
+<h1>piezoD - piezoresistive and piezoelectric cantilever design optimization</h1>
 </div>
-<p>piezoD is a tool for optimizing the performance of piezoresistive cantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design piezoresistive cantilevers.</p>
+<p>piezoD is a tool for optimizing the sensing performance of piezoresistive and piezoelectric microcantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design cantilevers.</p>
 <h1>features</h1>
 <ul>
 <li><p>materials</p>
 <ul>
-<li><p>p-type and n-type single crystal silicon cantilevers</p>
+<li><p>p-type and n-type single crystal silicon piezoresistive cantilevers</p>
+</li>
+<li><p>aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers</p>
 </li></ul>
 </li>
 <li><p>performance model</p>
@@ -45,14 +47,14 @@
 <ul>
 <li><p>simple bounds: all design parameters, e.g. cantilever length, bias voltage</p>
 </li>
-<li><p>general nonlinear constraints: power dissipation, resonant frequency (vacuum or fluid), resistance, spring constant</p>
+<li><p>general nonlinear constraints: power dissipation, temperature, resonant frequency (vacuum or fluid), resistance, spring constant</p>
 </li></ul>
 </li>
 <li><p>optimization targets</p>
 <ul>
-<li><p>force resolution in a user specified bandwidth</p>
+<li><p>force resolution</p>
 </li>
-<li><p>displacement resolution in a user specified bandwidth</p>
+<li><p>displacement resolution</p>
 </li>
 </ul>
 
@@ -61,10 +63,10 @@
 <h1>license</h1>
 <p>Copyright&copy; 2009-2010 Joey Doll and Stanford Microsystems Lab</p>
 <p>piezoD is free software; you can redistribute it and/or modify it under the terms of the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License</a> as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version.</p>
-<p>piezoD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License</a> for more details</p>
+<p>piezoD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License</a> for more details.</p>
 <div id="footer">
 <div id="footer-text">
-Page generated 2010-04-06 12:50:43 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2010-06-17 14:40:25 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

@@ -26,6 +26,23 @@
 </div>
 <p>piezoD is under active development.</p>
 <h1>Revisions</h1>
+<h2>Version 0.4.0</h2>
+<ul>
+<li><p>A big release. Added piezoelectric cantilever design optimization.</p>
+</li>
+</ul>
+<ul>
+<li><p>Added 1D temperature profile modeling using finite differences.</p>
+</li>
+</ul>
+<ul>
+<li><p>Changed the handling of the operating fluid. The class now has a fluid variable which can be &ldquo;vacuum&rdquo;, &ldquo;air&rdquo; or &ldquo;water&rdquo;. This affects heat transfer and resonant frequency calculations.</p>
+</li>
+</ul>
+<ul>
+<li><p>Speed improvements. They are negated by the need to calculate the quality factor (based upon Sader's cantilever theory) every iteration in order to accurately determine the thermomechanical noise.</p>
+</li>
+</ul>
 <h2>Version 0.3.1</h2>
 <ul>
 <li><p>Moved the goals and constants (e.g. VACUUM = 1) to class variables for tidiness. See 'sample_code&rsquo; for examples.</p>
@@ -122,12 +139,12 @@ user friendly and reduce barriers to usage.</p>
 </li>
 </ul>
 <ul>
-<li><p>Flexible constraint and bound</p>
+<li><p>Flexible constraint and bounds</p>
 </li>
 </ul>
 <div id="footer">
 <div id="footer-text">
-Page generated 2010-04-06 12:50:43 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2010-06-17 14:40:25 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

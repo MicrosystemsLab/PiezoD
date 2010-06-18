@@ -117,11 +117,15 @@ c_epitaxy.displacement_resolution()
 c_epitaxy.print_performance()
 c_epitaxy.print_performance_for_excel()
 </pre></div></div>
+<p>You can change the operating environment of the cantilever by setting the fluid variable. The default value is 'air&rsquo;.</p>
+<div class="codeblock">
+<div class="blockcontent"><pre>
+c_epitaxy.fluid = 'water';
+</pre></div></div>
 <p>The cantilever already has decent performance, but we could do much better by optimizing the cantilever design. In order to optimize the design we need to provide a few constraints on the design variable limitations.</p>
 <div class="codeblock">
 <div class="blockcontent"><pre>
 omega_min_hz = 5*freq_max;
-fluid_type = 'vacuum';
 max_power = 2e-3;
 
 constraints = {{'min_t', 'min_w', 'max_v_bridge'}, {1e-6, 4e-6, 10}};
@@ -131,7 +135,7 @@ constraints = {{'min_t', 'min_w', 'max_v_bridge'}, {1e-6, 4e-6, 10}};
 <p>Let's do the optimization.</p>
 <div class="codeblock">
 <div class="blockcontent"><pre>
-c_epitaxy = c_epitaxy.optimize_performance_from_current(max_power, omega_min_hz, fluid_type, constraints);
+c_epitaxy = c_epitaxy.optimize_performance_from_current(max_power, omega_min_hz, constraints);
 </pre></div></div>
 <p>And we can check the new performance.</p>
 <div class="codeblock">
@@ -141,10 +145,10 @@ c_epitaxy.print_performance()
 <p>If you compare the force resolution before and after the optimization you should see a significant improvement. When I ran this, it went from 125 pN to 2.5 pN.</p>
 <p>By default the code optimizes for force resolution. We're working on a simple interface for optimizing for displacement resolution, although just one line of code needs to be changed (search for problem.objective in cantilever.m).</p>
 <p>That wraps up the basic tutorial on optimizing an epitaxial cantilever. Read through sample_code.m and the comments in the code for additional tips.</p>
-<p>If you have other questions, please <a href="./contact.html">contact</a> us and be sure to <a href="./contributing.html">contribute</a> to help make the project better and help future users</p>
+<p>If you have other questions, please <a href="./contact.html">contact</a> us and be sure to <a href="./contributing.html">contribute</a> to help make the project better and help future users.</p>
 <div id="footer">
 <div id="footer-text">
-Page generated 2010-04-06 12:50:43 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2010-06-17 14:40:25 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

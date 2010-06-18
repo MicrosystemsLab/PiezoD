@@ -5,6 +5,17 @@ piezoD is under active development.
 
 = Revisions
 
+== Version 0.4.0
+
+- A big release. Added piezoelectric cantilever design optimization.
+
+- Added 1D temperature profile modeling using finite differences.
+
+- Changed the handling of the operating fluid. The class now has a fluid variable which can be "vacuum", "air" or "water". This affects heat transfer and resonant frequency calculations.
+
+- Speed improvements. They are negated by the need to calculate the quality factor (based upon Sader's cantilever theory) every iteration in order to accurately determine the thermomechanical noise.
+
+
 == Version 0.3.1
 
 - Moved the goals and constants (e.g. VACUUM = 1) to class variables for tidiness. See 'sample_code' for examples.

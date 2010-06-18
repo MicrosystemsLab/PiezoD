@@ -1,22 +1,23 @@
 # jemdoc: menu{MENU}{index.html}
-= piezoD - piezoresistive cantilever design optimization
+= piezoD - piezoresistive and piezoelectric cantilever design optimization
 
-piezoD is a tool for optimizing the performance of piezoresistive cantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design piezoresistive cantilevers.
+piezoD is a tool for optimizing the sensing performance of piezoresistive and piezoelectric microcantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design cantilevers.
 
 = features
 
 - materials
- -- p-type and n-type single crystal silicon cantilevers
+ -- p-type and n-type single crystal silicon piezoresistive cantilevers
+ -- aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers
 - performance model
  -- noise: 1/f, johnson, amplifier
  -- sensitivity: concentration dependent piezoresistance factor
  -- doping methods: epitaxy, diffusion, including solid solubility limitations
 - constraints available
  -- simple bounds: all design parameters, e.g. cantilever length, bias voltage
- -- general nonlinear constraints: power dissipation, resonant frequency (vacuum or fluid), resistance, spring constant
+ -- general nonlinear constraints: power dissipation, temperature, resonant frequency (vacuum or fluid), resistance, spring constant
 - optimization targets
- -- force resolution in a user specified bandwidth
- -- displacement resolution in a user specified bandwidth
+ -- force resolution
+ -- displacement resolution
 
 = license
 

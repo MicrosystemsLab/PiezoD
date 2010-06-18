@@ -76,7 +76,7 @@ classdef cantilever
 
     number_of_piezoresistors = 2;
     rms_actuator_displacement_noise = 1e-12; % m
-    alpha = 1e-5; % unitless
+    alpha = 1e-6; % unitless
     amplifier = 'INA103';
     doping_type = 'boron';
     
@@ -89,6 +89,7 @@ classdef cantilever
   
   % Can be referred to with cantilever.variableName
   properties (Constant)
+    
     
     % Material constants
     T = 300; % kelvin
@@ -120,9 +121,9 @@ classdef cantilever
     minQ = 1e-6;
 
     % Define the materials
-    rho_cantilever = rho_Si;
-    rho_step = rho_Al;
-    E_step = E_Al;
+    rho_cantilever = cantilever.rho_Si;
+    rho_step = cantilever.rho_Al;
+    E_step = cantilever.E_Al;
     
     % The optimization goals
     goalForceResolution = 0;
@@ -169,6 +170,7 @@ classdef cantilever
       0.191043  0.189434    0.185931  0.176166  0.165118  0.154323  0.122124  0.105573  0.0938839 0.0925686 0.09682   0.126835;
       0.112082  0.111181    0.109199  0.103595  0.0971392 0.0907188 0.0707736 0.059728  0.0505049 0.0476557 0.0471326 0.0534759;
       0.0665172 0.0659974   0.0648471 0.0615627 0.0577366 0.0538889 0.0416384 0.0345727 0.0282418 0.025856  0.024611  0.0252877];
+
   end
   
   methods (Abstract)
@@ -191,7 +193,7 @@ classdef cantilever
       self.l_pr_ratio = l_pr_ratio;
       self.v_bridge = v_bridge;
       self.doping_type = doping_type;
-      self.fluid = 'air'; % Default value
+      self.fluid = 'air'; % Default value           
     end
     
     % Calculate the actual dimensions (getter functions)
@@ -262,6 +264,7 @@ classdef cantilever
     function print_performance_for_excel(self)
       % Calculate intermediate quantities
       [omega_damped_hz, Q] = self.omega_damped_hz_and_Q();
+      [TMax, TTip] = self.calculateMaxAndTipTemp();
       
       variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
         self.l_pr()*1e6, self.l_pr_ratio, ...
@@ -269,7 +272,7 @@ classdef cantilever
         self.force_resolution(), self.displacement_resolution(), ...
         self.omega_vacuum_hz(), omega_damped_hz, ...
         self.stiffness(), Q, self.force_sensitivity(), self.beta(), ...
-        self.resistance(), self.power_dissipation()*1e3, self.approxTipDeltaTemp(), ...
+        self.resistance(), self.power_dissipation()*1e3, TTip, ...
         self.integrated_noise(), self.integrated_johnson_noise(), ...
         self.integrated_hooge_noise(), self.knee_frequency()];
       
@@ -823,6 +826,107 @@ classdef cantilever
     end
     
     % ==================================
+    % ======= Simulate response  =======
+    % ==================================
+    
+    
+    function [t, voltageNoise] = calculateSimulinkNoise(self, tMax, Fs)
+      t = 0:1/Fs:tMax;
+
+      % Calculate the voltage noise parameters
+      whiteNoiseSigma = self.voltage_noise(self.freq_max);
+      fCorner = self.knee_frequency();
+      overSampleRatio = Fs/(2*self.freq_max);
+
+      % Generate voltage noise that matches the calculated spectrum
+      bandwidth = self.freq_max - self.freq_min;
+      whiteNoise = sqrt(bandwidth)*whiteNoiseSigma*randn(size(t))*sqrt(overSampleRatio);
+      pinkNoise = 2*pi*cumsum(whiteNoise)*fCorner*sqrt(whiteNoiseSigma)/overSampleRatio;
+      totalNoise = whiteNoise + pinkNoise;
+      voltageNoise = [t' totalNoise'];
+    end
+    
+    function [tSim, inputForce, actualForce, sensorForce] = simulateForceStep(self, tMax, Fs, forceMagnitude, forceDelay, forceHold)
+      [time, inputNoise] = self.calculateSimulinkNoise(tMax, Fs);
+      
+      % Generate the force
+      forceSignal = zeros(length(time), 1);
+      forceSignal(find(time>forceDelay,1):find(time>forceDelay+forceHold,1)) = forceMagnitude;
+      inputForce = [time' forceSignal];
+
+      % Define the parameters
+      [omega_damped Q] = self.omega_damped_and_Q();
+      SFpr = self.force_sensitivity();
+      k = self.stiffness();      
+      m = k/omega_damped^2;
+      b = k/omega_damped/Q;
+
+      % Amplifier
+      Kamp = 1e3;
+      Famp = 800e3; % Hz
+      Tamp = 1/(2*pi*Famp);
+      Sfv = SFpr*Kamp;
+      
+      % Filters
+      Tlowpass = 1/(2*pi*self.freq_max);
+      Thighpass = 1/(2*pi*self.freq_min);
+      
+      options = simset('FixedStep', 1/Fs, 'SrcWorkspace', 'current');
+      tSim = sim('sensorSimulation', tMax, options);
+      
+    end
+
+    function simulateAndPlotForceStep(self, tMax, Fs, forceMagnitude, forceDelay, forceHold)
+      [tSim, inputForce, actualForce, sensorForce] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
+      
+      figure
+      hold all
+      plot(tSim*1e6, 1e12*inputForce(:,2)); % work from inputVoltage rather than inputForce due to diff in time
+      plot(tSim*1e6, 1e12*actualForce);
+      plot(tSim*1e6, 1e12*sensorForce);
+      hold off
+      xlabel('Time (microseconds)');
+      ylabel('Output (pN)');
+      legend('Applied Force', 'Cantilever Response', 'Sensor Response', 'Location', 'Best')      
+    end
+    
+    function simulateAndPlotMultipleForceSteps(self, tMax, Fs, forceMagnitude, forceDelay, forceHold, numSims)
+
+      rms_mdf = self.force_resolution();
+      pp_mdf = 3*rms_mdf;
+      
+      figure
+      hold all
+
+      % Do an initial simulation to find the expected trajectory
+      [tSim, inputForce, actualForce, sensorForce] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
+      
+      % Fill in the grey background and draw the black nominal force line
+      x = 1e6*[tSim ; flipud(tSim)];
+      y = 1e12*[actualForce+pp_mdf ; flipud(actualForce-pp_mdf)];
+      patch(x, y, cantilever.colorLightGrey, 'EdgeColor', 'none')
+
+      x = 1e6*[tSim ; flipud(tSim)];
+      y = 1e12*[actualForce+rms_mdf ; flipud(actualForce-rms_mdf)];
+      patch(x, y, cantilever.colorDarkGrey, 'EdgeColor', 'none')      
+      
+      % Do the simulations and plot
+      for ii = 1:numSims
+        [tSim, inputForce, actualForce, sensorForce] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
+        plot(1e6*tSim, 1e12*sensorForce, 'Color', cantilever.colorBlue)
+      end
+      plot(1e6*tSim, 1e12*actualForce, '-', 'Color', cantilever.colorBlack, 'LineWidth', cantilever.plotLineWidth+1);      
+      hold off
+      xlabel('Time (microseconds)');
+      ylabel('Output (pN)');
+    end
+    
+    function simulateAndPlotMultipleForceNoise(self, tMax, Fs, numSims)
+      self.simulateAndPlotMultipleForceSteps(tMax, Fs, 0, 0, 0, numSims);
+    end
+    
+    
+    % ==================================
     % ========= Optimization  ==========
     % ==================================
     
@@ -1016,9 +1120,9 @@ classdef cantilever
         problem.x0 = scaling.*self.current_state();
       end
       
-      % To ensure that we don't have a bad initial point
-      check_lever = self.cantilever_from_state(problem.x0);
-      check_lever.print_performance()
+%       % To ensure that we don't have a bad initial point
+%       check_lever = self.cantilever_from_state(problem.x0);
+%       check_lever.print_performance()
       
       if goal == cantilever.goalForceResolution
         problem.objective = @self.optimize_force_resolution;

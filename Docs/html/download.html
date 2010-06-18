@@ -26,6 +26,8 @@
 </div>
 <p>piezoD is composed of several Matlab classes. You can download official releases from here.</p>
 <ul>
+<li><p><a href="./v0.4.0.zip">v0.4.0 - 06/17/10</a> - Big changes. Wrote a piezoelectric sensor class. Added thermal modeling to PR cantilevers and temperature constrained design. Lots of performance improvements.</p>
+</li>
 <li><p><a href="./v0.3.1.zip">v0.3.1 - 03/30/10</a> - Added amplifier current noise, changed some default optimization constraints and the default gamma value. Added a parameter for the number of silicon resistors in the bridge.</p>
 </li>
 <li><p><a href="./v0.3.0.zip">v0.3.0 - 09/13/09</a> - Rewrote the method for passing in nonlinear constraints to the optimizer. It is much easier to optimize for a spring constant value or range now. Also changing the optimization goal from force to displacement can be specified more easily.</p>
@@ -39,12 +41,12 @@
 </ul>
 <p>The versions posted here will lag behind the actual code development. The most recent code and detailed changes can be found at the <a href="http://github.com/jcdoll/PiezoD/commits/master/">github</a> page.</p>
 <p>piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used.</p>
-<p>Installation is just a matter of placing <b>cantilever.m</b>, <b>cantilever_diffusion.m</b> and <b>cantilever_epitaxy.m</b> in your Matlab path. You can check that it works by running <b>sample_code.m</b>.</p>
+<p>Installation is just a matter of placing <b>cantilever.m</b>, <b>cantilever_diffusion.m</b>, <b>cantilever_epitaxy.m</b> and <b>PECantilever.m" in your Matlab path. You can check that it works by running </b>sample_code.m*.</p>
 <p>Please request any new features and report bugs <a href="http://github.com/jcdoll/PiezoD/issues">here</a>.</p>
-<p><b>Important:</b> if piezoD seems to be running slowly, try running <i>clear</i> twice before running it again. The origins of this bug are unclear</p>
+<p><b>Important:</b> if piezoD seems to be running slowly, try running <i>clear</i> twice before running it again.</p>
 <div id="footer">
 <div id="footer-text">
-Page generated 2010-04-06 12:50:43 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2010-06-17 14:40:25 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>
