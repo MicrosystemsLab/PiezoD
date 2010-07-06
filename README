@@ -1,3 +1,71 @@
+=================== General Notes =================== 
+* Usage
+      Create a cantilever
+          c = cantilever_diffusion(1e0, 1e3, 100e-6, 50e-6, 10e-6, 0.5,
+          0.5, 0.5, 5, 'boron', 20*60, 1000)
+
+      Calculate some useful properties
+          resistance = c.resistance();
+          sensitivity = c.force_sensitivity();
+          [omega_d, Q] = c.omega_damped_hz_quality_factor();
+
+      Design a better cantilever
+          c_optimized = c.optimize_performance(3.5e-3, 5e3, 'water',
+              30e-9, 1e-6, 5)
+
+      More code is included in sample_code.m
+
+      The code accounts for dopant type, adjusting the elastic modulus
+      and piezoresistive coefficient accordingly. Phosphorus, boron and
+      arsenic are supported, although the piezoresistive coefficient
+      calculator is based upon Harley's fit to experimental data which is
+      only for Boron.
+
+* Optimization Scaling
+      fmincon and other l-bfgs-b optimization routines don't work
+      particularly well if there's a large difference in the size of the
+      parameters it is tweaking. After each iteration it finds the
+      sensitivity of the variable to optimize with respect to a change in
+      the other variables. If dopant concentration is 1e19 per cc and
+      voltage is 5V, a unit change for each variable will have very
+      different effects on the optimization output, and bfgs won't know
+      what to do.
+      This problem is solved by scaling the variables back to O(1)
+      before putting them into the optimization code. Careful steps are
+      taken in order to calculate the optimization goal accurately and
+      rescaling the parameters at the proper time between iterations.
+
+* Extending the Code
+      Cantilever is the abstract base class that implements most of the
+      details. In order to actually do anything, you need to implement
+      a base class which implements at least these methods:
+          doping_profile
+          optimization_scaling
+          cantilever_from_state
+          optimize_performance
+          optimization_constraints
+
+      You might also want to change or override, but it's optional
+          print_performance
+          print_performance_for_excel
+          optimization_constraints
+
+      In order to demonstrate how you might do this, and to design some
+      cantilevers, we have created and included cantilever_epitaxy and
+      cantilever_diffusion.
+
+      Right now the code is oriented towards optimization force
+      resolution, but it is easy to extend it to other variables. You
+      would just need to modify your optimize_performance function.
+
+* Assumptions
+      You're using the INA103 amplifier with a gain of at least 100. This
+      determines the input referred voltage noise of the amplifier.
+
+
+
+=================== Development =================== 
+
 To push:
 git push github
 
@@ -7,3 +75,6 @@ where your .git/config file has a github remote entry set up
         url = git@github.com:username/myproject.git
         fetch = +refs/heads/*:refs/remotes/github/*
         push = refs/heads/*:refs/heads/*
+
+
+

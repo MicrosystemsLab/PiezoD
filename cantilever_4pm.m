@@ -1,3 +1,67 @@
+% General Notes
+% * Usage
+%       Create a cantilever
+%           c = cantilever_diffusion(1e0, 1e3, 100e-6, 50e-6, 10e-6, 0.5,
+%           0.5, 0.5, 5, 'boron', 20*60, 1000)
+%
+%       Calculate some useful properties
+%           resistance = c.resistance();
+%           sensitivity = c.force_sensitivity();
+%           [omega_d, Q] = c.omega_damped_hz_quality_factor();
+%
+%       Design a better cantilever
+%           c_optimized = c.optimize_performance(3.5e-3, 5e3, 'water',
+%               30e-9, 1e-6, 5)
+%
+%       More code is included in sample_code.m
+%
+%       The code accounts for dopant type, adjusting the elastic modulus
+%       and piezoresistive coefficient accordingly. Phosphorus, boron and
+%       arsenic are supported, although the piezoresistive coefficient
+%       calculator is based upon Harley's fit to experimental data which is
+%       only for Boron.
+%
+% * Optimization Scaling
+%       fmincon and other l-bfgs-b optimization routines don't work
+%       particularly well if there's a large difference in the size of the
+%       parameters it is tweaking. After each iteration it finds the
+%       sensitivity of the variable to optimize with respect to a change in
+%       the other variables. If dopant concentration is 1e19 per cc and
+%       voltage is 5V, a unit change for each variable will have very
+%       different effects on the optimization output, and bfgs won't know
+%       what to do.
+%       This problem is solved by scaling the variables back to O(1)
+%       before putting them into the optimization code. Careful steps are
+%       taken in order to calculate the optimization goal accurately and
+%       rescaling the parameters at the proper time between iterations.
+%
+% * Extending the Code
+%       Cantilever is the abstract base class that implements most of the
+%       details. In order to actually do anything, you need to implement
+%       a base class which implements at least these methods:
+%           doping_profile
+%           optimization_scaling
+%           cantilever_from_state
+%           optimize_performance
+%           optimization_constraints
+%
+%       You might also want to change or override, but it's optional
+%           print_performance
+%           print_performance_for_excel
+%           optimization_constraints
+%
+%       In order to demonstrate how you might do this, and to design some
+%       cantilevers, we have created and included cantilever_epitaxy and
+%       cantilever_diffusion.
+%
+%       Right now the code is oriented towards optimization force
+%       resolution, but it is easy to extend it to other variables. You
+%       would just need to modify your optimize_performance function.
+%
+% * Assumptions
+%       You're using the INA103 amplifier with a gain of at least 100. This
+%       determines the input referred voltage noise of the amplifier.
+
 classdef cantilever
   
   properties
@@ -10,25 +74,17 @@ classdef cantilever
     v_bridge; % Volts
     fluid;
 
-    number_of_piezoresistors;
+    number_of_piezoresistors = 2;
     rms_actuator_displacement_noise = 1e-12; % m
     alpha = 1e-6; % unitless
     amplifier = 'INA103';
     doping_type = 'boron';
     
-    % (Optional) Account for tip mass loading or a thick material step at the base
-    tip_mass;
-    
-    % (Optional) Account for a stiffening layer (step) or actuator (thermal or piezoelectric) at the base
-    cantilever_type; % 'none', 'step', 'thermal', 'piezoelectric'
-    l_a;
-    w_a;
-    t_a;
-
-    v_actuator;
-    R_heater;
-    t_electrode;
-    t_a_seed;
+    % (Optional) Account for tip mass loading or a reinforcement step at the base
+    tip_mass = 0;    
+    l_step = 0;
+    t_step = 0;
+    w_step = 0;
   end
   
   % Can be referred to with cantilever.variableName
@@ -40,8 +96,7 @@ classdef cantilever
     k_b_eV = 8.617343e-5; % eV/K
     q = 1.60218e-19; % Coulombs
     
-    numFrequencyPoints = 500;
-    numXPoints = 1000;
+    numFrequencyPoints = 1000;
 
     % Fluid properties
     rho_water = 1e3; % kg/m^3
@@ -50,37 +105,25 @@ classdef cantilever
     eta_air = 17e-6; % Pa-sec
         
     % Thermal properties
-    % Si properties: http://www.ioffe.ru/SVA/NSM/Semicond/Si/thermal.html
     k_si = 130; % W/m-K
-    k_al = 237; % W/m-K
-    k_sio2 = 1.4; % W/m-K
-    k_ti = 21.9;
-    k_aln = 160; % W/m-K
-    
-    h_vacuum = 1e-6; % W/m^2-K - small but finite h for numerical stability
     h_air = 1000; % W/m^2-K
     h_water = 20000; % W/m^2-k
-
-    % Actuator properties
-    alpha_al = 23.1e-6;
-    alpha_sio2 = 0.5e-6;
-    alpha_si = 2.6e-6;
-    alpha_ti = 8.6e-6;
-    alpha_aln = 4.5e-6;
-    d31_aln = 2.3e-12;
 
     % Mechanical material properties
     E_Si = 130e9;
     rho_Si = 2330;
+    nu_Si = 0.28;
     E_Al = 70e9;
     rho_Al = 2700;
-    E_Ti = 90e9;
-    rho_Ti = 4506;
-    E_AlN = 396e9;
-    rho_AlN = 3260;
+    nu_Al = 0.35;
     maxQ = 1000;
     minQ = 1e-6;
 
+    % Define the materials
+    rho_cantilever = cantilever.rho_Si;
+    rho_step = cantilever.rho_Al;
+    E_step = cantilever.E_Al;
+    
     % The optimization goals
     goalForceResolution = 0;
     goalDisplacementResolution = 1;
@@ -131,11 +174,11 @@ classdef cantilever
   
   methods (Abstract)
     doping_profile(self)
-    doping_optimization_scaling(self)
-    doping_cantilever_from_state(self)
-    doping_current_state(self)
-    doping_initial_conditions_random(self)
-    doping_optimization_bounds(self, parameter_constraints)    
+    optimization_scaling(self)
+    cantilever_from_state(self, x0)
+    initial_conditions_random(self)
+    current_state(self)
+    optimization_bounds(self, parameter_constraints)
   end
   
   methods
@@ -149,17 +192,7 @@ classdef cantilever
       self.l_pr_ratio = l_pr_ratio;
       self.v_bridge = v_bridge;
       self.doping_type = doping_type;
-      
-      % Default values
-      self.fluid = 'air'; 
-      self.cantilever_type = 'none';
-      self.l_a = 0;
-      self.t_a = 0;
-      self.w_a = 0;
-      self.tip_mass = 0;
-      self.t_electrode = 50e-9;
-      self.t_a_seed = 50e-9;
-      self.number_of_piezoresistors = 2;
+      self.fluid = 'air'; % Default value           
     end
     
     % Calculate the actual dimensions (getter functions)
@@ -175,21 +208,8 @@ classdef cantilever
     % ========= Pretty output ==========
     % ==================================
     
-    function check_valid_cantilever(self)
-      validity_checks(1) = 1;
-      validity_checks(2) = ~(strcmp(self.cantilever_type, 'none') && (self.l_a > 0));
-      [valid, failed_index] = min(validity_checks);
-      
-      if ~valid
-        sprintf('ERROR: Invalid cantilever - failed check #%d', failed_index)
-        pause
-      end
-    end
-    
     % fprintf performance
     function print_performance(self)
-      
-      self.check_valid_cantilever();
       
       % Calculate intermediate quantities
       [omega_damped_hz, Q] = self.omega_damped_hz_and_Q();
@@ -238,68 +258,27 @@ classdef cantilever
       fprintf('Number of Carriers: %g \n', self.number_of_carriers());
       fprintf('Nz: %g \n', Nz)
       fprintf('\n')
-      fprintf('\n')
-      
-      switch self.cantilever_type
-        case 'none'
-          % Do nothing special
-        case 'step'
-          fprintf('Step at base (um): %f thick x %f long \n', 1e6*self.t_a, 1e6*self.l_a)
-        case 'thermal'
-          fprintf('Actuator l/W/T: %f %f %f \n', 1e6*self.l_a, 1e6*self.w_a, 1e6*self.t_a)
-          fprintf('Neutral axis (um): %f \n', 1e6*self.actuatorNeutralAxis())          
-          fprintf('Actuator Voltage (): %f \n', self.v_actuator)
-          fprintf('Heater resistance (kOhm): %f \n', 1e-3*self.R_heater)
-          fprintf('Actuator Power (mW): %f \n', 1e3*self.heaterPower())
-          fprintf('Tip Deflection (nm): %f \n', 1e9*self.tipDeflection())
-        case 'piezoelectric'
-          fprintf('Actuator l/W/T: %f %f %f \n', 1e6*self.l_a, 1e6*self.w_a, 1e6*self.t_a)
-          fprintf('Neutral axis (um): %f \n', 1e6*self.actuatorNeutralAxis())          
-          fprintf('Actuator Voltage (): %f \n', self.v_actuator)
-          fprintf('Tip Deflection (nm): %f \n', 1e9*self.tipDeflection())          
-      end
-        
     end
     
-    function print_performance_for_excel(self, varargin)
-
-      % varargin gets another set of {} from the cantilever subclasses
-      varargin = varargin{1};
-      optargin = size(varargin, 2);
-      
-      if optargin == 1
-        fid = varargin{1};
-      elseif optargin == 0
-        fid = 1; % Print to the stdout
-      else
-        fprintf('ERROR: Extra optional arguments')
-      end
-      
+    function print_performance_for_excel(self)
       % Calculate intermediate quantities
       [omega_damped_hz, Q] = self.omega_damped_hz_and_Q();
       [TMax, TTip] = self.calculateMaxAndTipTemp();
-      [TMax_approx TTip_approx] = self.approxTempRise();
-      thermoLimit = self.thermo_integrated()/self.force_sensitivity();
-
-      variables_to_print = [self.freq_min, self.freq_max*1e-3, ...
-        1e6*self.l 1e6*self.w 1e9*self.t 1e6*self.l_pr() 1e6*self.l_a 1e6*self.w_a 1e9*self.t_a, ...
-        self.force_resolution()*1e12, thermoLimit*1e12, self.displacement_resolution()*1e9, ...
-        self.omega_vacuum_hz()*1e-3, omega_damped_hz*1e-3, Q, self.stiffness()*1e3, ...
-        self.v_bridge, self.resistance()*1e-3, self.sheet_resistance(), self.power_dissipation()*1e6, ...
-        TMax, TTip, TMax_approx, TTip_approx, ...
-        self.number_of_piezoresistors, ...
-        self.effective_mass(), self.tip_mass, ...
-        self.force_sensitivity(), self.beta(), self.gamma(), ...
-        self.integrated_noise()*1e6, self.johnson_integrated()*1e6, ...
-        self.hooge_integrated()*1e6, self.amplifier_integrated()*1e6, ...
-        self.thermo_integrated()*1e6, self.knee_frequency(), self.number_of_carriers()];
-
-      fprintf(fid, '%s \t', self.doping_type);
-      fprintf(fid, '%s\t', self.fluid);
-      fprintf(fid, '%s\t', self.cantilever_type);
+      
+      variables_to_print = [self.l*1e6, self.w*1e6, self.t*1e6, ...
+        self.l_pr()*1e6, self.l_pr_ratio, ...
+        self.v_bridge, self.freq_min, self.freq_max, ...
+        self.force_resolution(), self.displacement_resolution(), ...
+        self.omega_vacuum_hz(), omega_damped_hz, ...
+        self.stiffness(), Q, self.force_sensitivity(), self.beta(), ...
+        self.resistance(), self.power_dissipation()*1e3, TTip, ...
+        self.integrated_noise(), self.integrated_johnson_noise(), ...
+        self.integrated_hooge_noise(), self.knee_frequency()];
+      
       for print_index = 1:length(variables_to_print)
-        fprintf(fid, '%.4g \t', variables_to_print(print_index));
+        fprintf('%g \t', variables_to_print(print_index));
       end
+      fprintf('\n')
     end
     
     % ==================================
@@ -310,7 +289,7 @@ classdef cantilever
     % Units: ohms
     function resistance = resistance(self)
       number_of_squares = self.resistor_length()/self.w_pr();
-      resistance = number_of_squares * self.sheet_resistance();
+      resistance = number_of_squares * self.sheet_resistance() / self.gamma();
     end
     
     % Calculate resistor length, used to calculat resistance and number of carriers
@@ -350,9 +329,9 @@ classdef cantilever
           mu_1 = 43.4;
           C_r = 9.96e16;
           C_s = 3.43e20;
-          mobility_alpha = 0.680;
-          mobility_beta = 2.0;
-          mobility = mu_0 + (mu_max - mu_0)./(1 + (n./C_r).^mobility_alpha) - mu_1./(1 + (C_s./n).^mobility_beta);
+          alpha = 0.680;
+          beta = 2.0;
+          mobility = mu_0 + (mu_max - mu_0)./(1 + (n./C_r).^alpha) - mu_1./(1 + (C_s./n).^beta);
           
         case 'phosphorus'
           % Phosphorus data
@@ -361,9 +340,9 @@ classdef cantilever
           mu_1 = 56.1;
           C_r = 9.2e16;
           C_s = 3.41e20;
-          mobility_alpha = 0.711;
-          mobility_beta = 1.98;
-          mobility = mu_0 + (mu_max - mu_0)./(1 + (n./C_r).^mobility_alpha) - mu_1./(1 + (C_s./n).^mobility_beta);
+          alpha = 0.711;
+          beta = 1.98;
+          mobility = mu_0 + (mu_max - mu_0)./(1 + (n./C_r).^alpha) - mu_1./(1 + (C_s./n).^beta);
           
         case 'boron'
           % Boron data
@@ -372,10 +351,10 @@ classdef cantilever
           mu_1 = 29.0;
           C_r = 2.23e17;
           C_s = 6.1e20;
-          mobility_alpha = 0.719;
-          mobility_beta = 2.00;
+          alpha = 0.719;
+          beta = 2.00;
           p_c = 9.23e16;
-          mobility = mu_0.*exp(-p_c./n) + mu_max./(1 + (p./C_r).^mobility_alpha) - mu_1./(1 + (C_s./p).^mobility_beta);
+          mobility = mu_0.*exp(-p_c./n) + mu_max./(1 + (p./C_r).^alpha) - mu_1./(1 + (C_s./p).^beta);
           
       end
     end
@@ -402,7 +381,8 @@ classdef cantilever
     % Integrated 1/f noise density for the entire Wheatstone bridge
     % Unit: V
     function hooge_integrated = hooge_integrated(self)
-      hooge_integrated = sqrt(self.alpha*self.v_bridge^2*self.number_of_piezoresistors./(4*self.number_of_carriers())*log(self.freq_max/self.freq_min));
+      freq = logspace( log10(self.freq_min), log10(self.freq_max), cantilever.numFrequencyPoints);
+      hooge_integrated = sqrt(trapz(freq, self.hooge_PSD(freq)));
     end
     
     % Johnson noise PSD from the entire Wheatstone bridge. Equal to that of a single resistor
@@ -410,29 +390,28 @@ classdef cantilever
     % Units: V^2/Hz
     function johnson_PSD = johnson_PSD(self, freq)
       R_external = 700;
-      resistance = self.resistance()/self.gamma(); % Account for gamma - can't do it in resistance() else circular ref
-      johnson_PSD = 4*self.k_b*self.T*(resistance/2 + R_external/2) * ones(1, length(freq));
+      johnson_PSD = 4*self.k_b*self.T*(self.resistance()/2 + R_external/2) * ones(1, length(freq));
     end
     
     % Integrated Johnson noise
     % Unit: V
     function johnson_integrated = johnson_integrated(self)
-      R_external = 700;
-      johnson_integrated = sqrt(4*self.k_b*self.T*(self.resistance()/2 + R_external/2)*(self.freq_max - self.freq_min));
+      freq = logspace( log10(self.freq_min), log10(self.freq_max), cantilever.numFrequencyPoints);
+      johnson_integrated = sqrt(trapz(freq, self.johnson_PSD(freq)));
     end
     
     % Thermomechanical noise PSD
     % Units: V^2/Hz
     function thermo_PSD = thermo_PSD(self, freq)
-      [omega_damped_hz, Q_M] = self.omega_damped_hz_and_Q();
-      thermo_PSD = (self.force_sensitivity())^2 * 2*self.stiffness()*self.k_b*self.T/(pi*omega_damped_hz*Q_M) * ones(1, length(freq));
+      [omega_damped, Q_M] = self.omega_damped_and_Q();
+      thermo_PSD = (self.force_sensitivity())^2 * 2*self.stiffness()*self.k_b*self.T/(pi*self.omega_vacuum_hz()*Q_M) * ones(1, length(freq));
     end
     
     % Integrated thermomechanical noise
     % Unit: V
     function thermo_integrated = thermo_integrated(self)
-      [omega_damped_hz, Q_M] = self.omega_damped_hz_and_Q();
-      thermo_integrated = sqrt((self.force_sensitivity())^2 * 2*self.stiffness()*self.k_b*self.T/(pi*omega_damped_hz*Q_M)*(self.freq_max - self.freq_min));
+      freq = logspace( log10(self.freq_min), log10(self.freq_max), cantilever.numFrequencyPoints);
+      thermo_integrated = sqrt(trapz(freq, self.thermo_PSD(freq)));
     end
     
     % Accounts for the noise of the actuator that the cantilever is mounted on
@@ -468,25 +447,8 @@ classdef cantilever
     % Integrated amplifier noise
     % Units: V
     function amplifier_integrated = amplifier_integrated(self)
-      
-      switch self.amplifier
-        case 'INA103'
-          A_VJ = 1.2e-9; % 1.2 nV/rtHz noise floor
-          A_IJ = 2e-12; % 2 pA/rtHz noise floor
-          A_VF = 6e-9; % 6 nV/rtHz @ 1 Hz
-          A_IF = 25e-12; % 25 pA/rtHz @ 1 Hz
-        case 'AD8221'
-          A_VJ = 8e-9;
-          A_IJ = 40e-15;
-          A_VF = 12e-9;
-          A_IF = 550e-15;
-        otherwise
-          fprintf('ERROR: UNKNOWN AMPLIFIER')
-          pause
-      end
-      R_effective = self.resistance()/2; % resistance seen by amplifier inputs
-      amplifier_integrated = sqrt(A_VJ^2*(self.freq_max - self.freq_min) + A_VF^2*log(self.freq_max/self.freq_min) + ...
-        2*(R_effective*A_IJ)^2*(self.freq_max - self.freq_min) + 2*(R_effective*A_IF)^2*log(self.freq_max/self.freq_min));
+      freq = logspace( log10(self.freq_min), log10(self.freq_max), cantilever.numFrequencyPoints);
+      amplifier_integrated = sqrt(trapz(freq, self.amplifier_PSD(freq)));
     end
     
     % Calculate the knee frequency (equating the Hooge and Johnson noise)
@@ -500,8 +462,9 @@ classdef cantilever
     % Integrated cantilever noise for given bandwidth
     % Units: V
     function integrated_noise = integrated_noise(self)
+      freq = logspace( log10(self.freq_min), log10(self.freq_max), cantilever.numFrequencyPoints);
       integrated_actuator_noise = self.actuator_noise_integrated();
-      integrated_noise = sqrt(integrated_actuator_noise^2 + self.johnson_integrated()^2 + self.hooge_integrated()^2 + self.thermo_integrated()^2 + self.amplifier_integrated()^2);
+      integrated_noise = sqrt(integrated_actuator_noise^2 + trapz(freq, self.johnson_PSD(freq) + self.hooge_PSD(freq) + self.thermo_PSD(freq) + self.amplifier_PSD(freq)));
     end
     
     % Calculate the noise in V/rtHz at a given frequency
@@ -511,6 +474,7 @@ classdef cantilever
     
     function plot_noise_spectrum(self)
       freq = logspace( log10(self.freq_min), log10(self.freq_max), cantilever.numFrequencyPoints);
+      noise = self.voltage_noise(freq);
       
       figure
       hold all
@@ -545,18 +509,11 @@ classdef cantilever
     % Uses Richter's 2008 model from "Piezoresistance in p-type silicon revisited" for the case of T=300K
     % Could be readily generalized to account for temperature as well
     function piezoresistance_factor = piezoresistance_factor(self, dopant_concentration)
-      switch self.doping_type
-        case 'boron' % Apply the boron fit to all dopant types for now
-          Nb = 6e19;
-          Nc = 7e20;
-          richter_alpha = 0.43;
-          richter_gamma = 1.6;
-          piezoresistance_factor = (1 + (dopant_concentration/Nb).^richter_alpha + (dopant_concentration/Nc).^richter_gamma).^-1;
-        case {'phosphorus', 'arsenic'}
-	  a = 0.2330;
-          b = 5.61e21;
-	  piezoresistance_factor = log10((b./dopant_concentration).^a);
-      end
+      Nb = 6e19;
+      Nc = 7e20;
+      richter_alpha = 0.43;
+      richter_gamma = 1.6;
+      piezoresistance_factor = (1 + (dopant_concentration/Nb).^richter_alpha + (dopant_concentration/Nc).^richter_gamma).^-1;
     end
     
     function max_factor = max_piezoresistance_factor(self)
@@ -592,9 +549,9 @@ classdef cantilever
     end
     
     % Ratio of piezoresistor resistance to total resistance (< 1)
+    % Assume that metal interconnects are used and that their resistance is about 10% of the total
     function gamma = gamma(self)
-      fixed_resistance = 50; % Ohms - assume metal vias and contact resistance
-      gamma = self.resistance()/(self.resistance() + fixed_resistance);
+      gamma = 0.9;
     end
     
     % Units: V/N
@@ -624,65 +581,22 @@ classdef cantilever
       
       switch self.fluid
         case 'vacuum'
-          h = self.h_vacuum;
+          h = 0;
         case 'air'
           h = self.h_air;
         case 'water'
           h = self.h_water;
       end
       
-      % Model the system as current sources (PR or heater) and resistors
-      switch self.cantilever_type
-        case 'none'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*self.k_si);
-          R_convection_pr = 1/(2*h*self.l_pr()*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*self.k_si);          
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-          
-          R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + 1/(R_conduction_tip + R_convection_tip));
-
-          TMax = self.power_dissipation()*R_total;
-          TTip = self.power_dissipation()*R_total/(R_conduction_tip + R_convection_tip)*R_convection_tip;
-          
-        case 'step'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*self.k_si) + self.l_a/(self.w_a*(self.t*self.k_si + self.t_a*self.k_al));
-          R_convection_pr = 1/(2*h*(self.l_pr()+self.l_a)*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*self.k_si);          
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-          
-          R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + 1/(R_conduction_tip + R_convection_tip));
-          
-          TMax = self.power_dissipation()*R_total;
-          TTip = self.power_dissipation()*R_total/(R_conduction_tip + R_convection_tip)*R_convection_tip;
-        case 'piezoelectric'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*self.k_si) + self.l_a/(self.w_a*(self.k_si*self.t + self.k_aln*(self.t_a + self.t_a_seed) + 2*self.k_ti*self.t_electrode));
-          R_convection_pr = 1/(2*h*self.l_pr()*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*self.k_si);          
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-
-          R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + 1/(R_conduction_tip + R_convection_tip));
-          
-          TMax = self.power_dissipation()*R_total;
-          TTip = self.power_dissipation()*R_total/(R_conduction_tip + R_convection_tip)*R_convection_tip;
-        case 'thermal'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*self.k_si) + self.l_a/(self.w_a*(self.t*self.k_si + self.t_a*self.k_al));
-          R_convection_pr = 1/(2*h*self.l_pr()*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*self.k_si);          
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-          R_conduction_heater = self.l_a/(2*self.w_a*(self.t*self.k_si + self.t_a*self.k_al));
-          R_convection_heater = 1/(2*h*self.l_a*(self.w_a + self.t_a));
-
-          T_heater = self.heaterPower()/(1/R_convection_heater + 1/R_conduction_heater);
-          
-          R_total = 1/(1/(R_conduction_pr + 1/(1/R_convection_heater + 1/R_conduction_heater)) + 1/R_convection_pr + 1/(R_conduction_tip + R_convection_tip));
-
-          TMaxDivider = 1/(1/R_convection_pr + 1/(R_conduction_tip + R_convection_tip)) / (R_conduction_pr + 1/(1/R_convection_pr + 1/(R_conduction_tip + R_convection_tip)));
-          TTipDivider = R_convection_tip/(R_convection_tip + R_conduction_tip);
-          
-          TMax = T_heater*TMaxDivider + self.power_dissipation()*R_total;
-          
-          TTip = T_heater*TMaxDivider*TTipDivider + self.power_dissipation()*R_total/(R_conduction_tip + R_convection_tip)*R_convection_tip;
-      end
+      exposedArea = 2*self.l*(self.w + self.t);
+      R_base = self.l_pr()/(2*self.w*self.t*self.k_si);
+      R_convection = 1/(2*pi*h*exposedArea); % Factor of 2*pi included for better agreement with F-D results
+      R_total = 1/(1/R_base + 1/R_convection);
+      
+      power = self.power_dissipation();
+      
+      TMax = power*R_base;
+      TTip = power*R_total;
     end
     
     % Model the temperature profile of a self-heated PR cantilever
@@ -693,80 +607,54 @@ classdef cantilever
     % - Finite differences: http://reference.wolfram.com/mathematica/tutorial/NDSolvePDE.html
     % - 1D Conduction Analysis: http://people.sc.fsu.edu/~burkardt/f_src/fd1d_heat_steady/fd1d_heat_steady.html
     function [x, T] = calculateTempProfile(self)
-      n_points = self.numXPoints;
-      totalLength = self.l + self.l_a;
-      dx = totalLength/(n_points - 1);
-      x = 0:dx:totalLength;
+      n_points = 800;
+      dx = self.l/(n_points - 1);
+      x = 0:dx:self.l;
       power = (self.v_bridge/2)^2/self.resistance();
-      Qgen = power/self.l_pr();
+      l_pr = self.l_pr(); % call once to improve speed
+      Qgen = power/l_pr;
       perimeter = 2*(self.w + self.t);
       
-      tempBase    = cantilever.T;
-      tempAmbient = cantilever.T;
+      tempBase    = 273 + 25;
+      tempAmbient = 273 + 25;
       
       % Choose the convection coefficient based upon the ambient fluid
       switch self.fluid
         case 'vacuum'
-          h = self.h_vacuum;
+          h = 0;
         case 'air'
           h = self.h_air;
         case 'water'
           h = self.h_water;
       end
-
-      % Determine the step and PR indices
-      actuator_indices = find(x < self.l_a);
-      cantilever_indices = find(x >= self.l_a);
-      pr_indices = intersect(cantilever_indices, find(x <= self.l_a + self.l_pr()));
       
-      % Build lookup vectors to find the thermal conductivity and heat generation terms
-      K = self.w*self.k_si*self.t*ones(n_points, 1); % Initialize to a plain cantilever
-      Q = zeros(n_points, 1);
-      
-      Q(pr_indices) = Qgen;
-      switch self.cantilever_type
-        case 'none'
-        case 'step'
-          K(actuator_indices) = self.w_a*(self.k_si*self.t + self.k_al*self.t_a);
-        case 'thermal'
-          Qheater = self.heaterPower()/self.l_a;
-          Q(actuator_indices) = Qheater;
-          K(actuator_indices) = self.w_a*(self.k_si*self.t + self.k_al*self.t_a);
-        case 'piezoelectric'
-          K(actuator_indices) = self.w_a*(self.k_si*self.t + self.k_aln*(self.t_a + self.t_a_seed) + 2*self.k_ti*self.t_electrode);          
-      end
-      
-      % Build A and RHS
-      A = zeros(n_points, n_points);
-      rhs = zeros(n_points, 1);
-      for ii = 2:n_points-1
-        A(ii, ii-1) = -K(ii-1)/dx^2;
-        A(ii, ii)   = (K(ii-1) + K(ii+1))/dx^2 + h*perimeter;
-        A(ii, ii+1) = -K(ii+1)/dx^2;
-        rhs(ii, 1) = Q(ii) + h*perimeter*tempAmbient;
-      end
+      % Build A
+      A_maindiagonal = 2*self.k_si*self.w*self.t/dx^2 + h*perimeter;
+      A_offdiagonal = -self.k_si*self.w*self.t/dx^2;
+      A = diag(ones(n_points, 1)  *A_maindiagonal, 0) + ...
+        diag(ones(n_points-1, 1)*A_offdiagonal,  1) + ...
+        diag(ones(n_points-1, 1)*A_offdiagonal, -1);
       A(1, 1) = 1; % Fixed temp at base
-      rhs(1,1) = tempBase;      
+      A(1, 2) = 0; % Remove an extra entry
       A(n_points, n_points-1:n_points) = [1 -1]; % Adiabatic at tip
-      A = sparse(A); % Leads to a significant speed improvement
+      A = sparse(A); % Use a sparse matrix because most of the entries are zero - convert after building it up
+      
+      % Generate the RHS matrix
+      rhs = ones(n_points, 1)*h*perimeter*tempAmbient;
+      rhs(x <= l_pr) = Qgen + h*perimeter*tempAmbient;
+      rhs(1,1) = tempBase; % Fixed temp
+      rhs(end,1) = 0; % Adiabatic
       
       % Solve and then return the temp rise relative to ambient
       T = A \ rhs;
       T = T - tempAmbient;
-    end
-    
-    function plotTempProfile(self)
-      [x, temp] = self.calculateTempProfile();
-      figure
-      plot(1e6*x, temp);
-      xlabel('X (um)');
-      ylabel('Temp Rise (K)');
+      
     end
     
     function [TMax, TTip] = calculateMaxAndTipTemp(self)
-      [tmp, temp] = self.calculateTempProfile();
-      TMax = max(temp);
-      TTip = temp(end);
+      [x, T] = self.calculateTempProfile();
+      TMax = max(T);
+      TTip = T(end);
     end
     
     % ==================================
@@ -782,131 +670,6 @@ classdef cantilever
       displacement_resolution = self.force_resolution()/self.stiffness();
     end
     
-    % ==================================
-    % ====== Multilayer beam mechanics and actuation ======
-    % ==================================
-    
-  function Cm = calculateActuatorNormalizedCurvature(self)
-    Zm = self.actuatorNeutralAxis();
-    [z, E, A, I] = self.lookupActuatorMechanics();
-    Z_offset = z - Zm;
-    Cm = 1./sum(E.*(I + A.*Z_offset.^2));
-  end
-  
-  function [z_layers, E_layers, A, I] = lookupActuatorMechanics(self)
-      switch self.cantilever_type
-        case 'none'
-          fprintf('ERROR: No step')
-        case {'step', 'thermal'}
-          t_layers = [self.t self.t_a];
-          w_layers = [self.w_a self.w_a];
-          E_layers = [self.modulus() self.E_Al];
-        case 'piezoelectric'
-          t_layers = [self.t self.t_electrode self.t_a self.t_electrode];
-          w_layers = [self.w_a self.w_a self.w_a self.w_a];
-          E_layers = [self.modulus() self.E_Ti self.E_AlN self.E_Ti];
-      end
-      
-      z_layers = zeros(1, length(t_layers));
-      for ii = 1:length(t_layers)
-        z_layers(ii) = sum(t_layers) - sum(t_layers(ii:end)) + t_layers(ii)/2; % z(1) = t(1)/2, z(2) = t(1) + t(2)/2
-      end
-      A = w_layers.*t_layers;
-      I = (w_layers.*t_layers.^3)/12;
-  end
-    
-  function Zm = actuatorNeutralAxis(self)
-    [z, E, A, I] = self.lookupActuatorMechanics();
-    Zm = sum(z.*E.*A)/sum(E.*A);
-  end
-  
-  
-  function [x, deflection] = calculateDeflection(self)
-    n_points = self.numXPoints;
-    totalLength = self.l + self.l_a;
-    dx = totalLength/(n_points - 1);
-    x = 0:dx:totalLength;
-    
-    M = 0; % external moment is zero
-    P = 0; % external load is zero
-    
-    [z, E, A, I] = self.lookupActuatorMechanics();
-    stress = self.calculateActuatorStress();
-    
-    % Calculate the curvature and neutral axis
-    % The curvature may vary as a function of position (especially for thermal actuation), so calculate the
-    % deflection by calculating the angle (from the curvature) and numerically integrating.
-    C = zeros(length(x), 1);
-    Zn = self.t/2*ones(length(x), 1); % At centroid by default
-    
-    % Calculate the curvature, C, and the neutral axis, Zn, along the cantilever length
-    for ii = 1:length(x)
-      if x(ii) <= self.l_a
-        C(ii) = ((M - sum(z.*A.*stress(ii,:)))*sum(E.*A) + (P + sum(A.*stress(ii,:)))*sum(E.*z.*A))/ ...
-          (sum(E.*A)*sum(E.*(I+A.*z.^2)) - sum(z.*E.*A)^2);
-        Zn(ii) = ((M - sum(z.*A.*stress(ii,:)))*sum(z.*E.*A) + (P + sum(A.*stress(ii,:)))*sum(E.*(I + A.*z.^2)))/ ...
-          ((M - sum(z.*A.*stress(ii,:)))*sum(E.*A) + (P + sum(A.*stress(ii,:)))*sum(E.*z.*A));
-      end
-    end
-    
-    theta = cumsum(C.*dx);
-    deflection = cumsum(theta.*dx);
-  end
-  
-  function strain = calculateActuatorStress(self)
-    [z, E, A, I] = self.lookupActuatorMechanics();
-    switch self.cantilever_type
-      case 'thermal'
-        [x_temp, temp] = self.calculateTempProfile();
-        cte = [self.alpha_si self.alpha_al];
-        strain = temp*(E.*cte); % size(x) by size(alpha) e.g. 500 x 3 in size
-      case 'piezoelectric'
-        E_field = [0 0 self.v_actuator/self.t_a 0]'; % Field from bottom to top
-        d31 = [0 0 self.d31_aln 0]';
-        strain = ones(self.numXPoints,1)*(E.*d31'.*E_field'); % size(x) by size(d31) e.g. 500 x 4 in size
-    end
-  end
-  
-    function power = heaterPower(self)
-      power = self.v_actuator^2/self.R_heater;
-    end
-    
-    function current = heaterCurrent(self)
-      current = self.v_actuator/self.R_heater;
-    end
-    
-    function z_tip = tipDeflection(self)
-      [x, z] = self.calculateDeflection();
-      z_tip = max(abs(z));
-    end
-    
-    function plotDeflectionAndTemp(self)
-      [x, deflection] = self.calculateDeflection();
-      [x, temp] = self.calculateTempProfile();
-      
-      figure
-      subplot(2,1,1);
-      plot(1e6*x, temp);
-      xlabel('Distance from Base (um)');
-      ylabel('Temp Rise (K)');
-      box off;
-      ylim([0 20])
-      
-%       ylim([min(temp) max(temp)])
-
-      subplot(2,1,2);
-      plot(1e6*x, 1e9*deflection);
-      xlabel('Distance from Base (um)');
-      ylabel('Cantilever Deflection (nm)');
-      box off;
-      ylim([-1000 0])
-%       ylim(1e9*[min(deflection) max(deflection)])
-    end
-    
-
-    
-  
-  
     % ==================================
     % ======== Beam mechanics ==========
     % ==================================
@@ -926,40 +689,32 @@ classdef cantilever
     % Bending stiffness of the cantilever to a point load at the tip
     % Units: N/m
     function stiffness = stiffness(self)
+      
       k_tip = self.modulus() * self.w * self.t^3 / (4*self.l^3);
       
       % If there is an actuator/reinforcement step at the base, model as two springs in series
-      switch self.cantilever_type
-        case 'none'
-          stiffness = k_tip;
-        otherwise
-          Cm_base = self.calculateActuatorNormalizedCurvature();
-          k_base = 3/(Cm_base*self.l_a^3);
-          stiffness = 1/(1/k_base + 1/k_tip);
-      end
-    end
+      if self.l_step > 0 && self.w_step > 0 && self.t_step > 0
+
+        % Calculate the stiffness of the actuator/step at the base as a bimorph
+        z = [self.t/2 self.t+self.t_step/2];
+        E = [self.modulus() self.E_step];
+        A = [self.w*t_c self.w_step*self.t_step];
+        I = 1/12*[self.w*self.t self.w_step*self.t_step].^3;
+        z_n = sum(z.*E.*A)/sum(E.*A);
+        Cm = 1/sum(E.*(I + A.*(z - z_n).^2));
+        k_base = 3/Cm/self.l_step^3;
         
-    function effective_mass = effective_mass(self)
-      cantilever_effective_mass = 0.243 * self.rho_Si * self.w * self.t * self.l;
-      
-      % Accounts for the lower curvature of the base vs. the cantilever
-      base_mass = 0;
-      Cm_tip = 12/(self.modulus()*self.w*self.t^3);
-      
-      switch self.cantilever_type
-        case 'none'
-        case {'step', 'thermal'}
-          Cm_base = self.calculateActuatorNormalizedCurvature();
-          correctionFactor = self.l_a/self.l*sqrt(2*self.t/self.t_a)*Cm_base/Cm_tip;
-          base_mass = correctionFactor*self.w_a*self.l_a*(self.rho_Si*self.t + self.rho_Al*self.t_a);          
-        case 'piezoelectric'
-          Cm_base = self.calculateActuatorNormalizedCurvature();
-          correctionFactor = self.l_a/self.l*sqrt(2*self.t/self.t_a)*Cm_base/Cm_tip;
-          base_mass = correctionFactor*self.w_a*self.l_a*(self.rho_Si*self.t + 2*self.rho_Ti*self.t_electrode + ...
-            self.rho_AlN*self.t_a + self.rho_AlN*self.t_a_seed);          
+        stiffness = 1/(1/k_base + 1/k_tip);
+      % Otherwise, just 
+      else
+        stiffness = k_tip;
       end
       
-      effective_mass = cantilever_effective_mass + base_mass + self.tip_mass;
+    end
+    
+    function effective_mass = effective_mass(self)
+      cantilever_effective_mass = 0.243 * self.rho_cantilever * self.w * self.t * self.l;
+      effective_mass = cantilever_effective_mass + self.tip_mass;
     end
     
     function [rho_fluid, eta_fluid] = lookupFluidProperties(self)
@@ -979,7 +734,12 @@ classdef cantilever
     % Resonant frequency for undamped vibration (first mode)
     % Units: radians/sec
     function omega_vacuum = omega_vacuum(self)
-      omega_vacuum = sqrt( self.stiffness() / self.effective_mass());
+      % If there is an actuator/reinforcement step at the base, use empirical FEA validated model
+      if self.l_step > 0 && self.w_step > 0 && self.t_step > 0
+        
+      else
+        omega_vacuum = sqrt( self.stiffness() / self.effective_mass());
+      end
     end
     
     % Resonant frequency for undamped vibration (first mode)
@@ -1004,18 +764,16 @@ classdef cantilever
       % We're searching for a function minimum, so return the residual squared (continuous and smooth)
       function residual_squared = find_natural_frequency(omega_damped)
         hydro = self.hydrodynamic_function(omega_damped, rho_f, eta_f);
-        residual = omega_damped - omega_vacuum*(1 + pi * rho_f * self.w/(4 * self.rho_Si * self.t) .* real(hydro)).^-0.5;
+        residual = omega_damped - self.omega_vacuum()*(1 + pi * rho_f * self.w/(4 * self.rho_cantilever * self.t) .* real(hydro)).^-0.5;
         residual_squared = residual^2;
       end
       
       % Lookup fluid properties once, then calculate omega_damped and Q
       [rho_f eta_f] = self.lookupFluidProperties();
-      omega_vacuum = self.omega_vacuum();
-      options = optimset('TolX', 10, 'TolFun', 1e-4, 'Display', 'off');
+      options = optimset('TolX', 1, 'TolFun', 1e-6, 'Display', 'off'); % Calculate omega_damped to within 1 radian/sec
       omega_damped = fminbnd(@find_natural_frequency, 0, self.omega_vacuum(), options);
-      
       hydro = self.hydrodynamic_function(omega_damped, rho_f, eta_f);
-      Q = (4 * self.rho_Si * self.t / (pi * rho_f * self.w) + real(hydro)) / imag(hydro);
+      Q = (4 * self.rho_cantilever * self.t / (pi * rho_f * self.w) + real(hydro)) / imag(hydro);
 
       % Sometimes our initial guess will turn up Q = NaN because it's outside the bounds of the interpolation
       % Usually this is because the cantilever is shorter than it is wide, and it will be fixed after
@@ -1047,7 +805,7 @@ classdef cantilever
       R = sqrt(self.w*self.l/pi); % effective sphere radius
       delta = sqrt(2*eta_f/rho_f/omega_0); % boundary layer thickness
       
-      Q = k_0^2/(12*pi*sqrt(3))*sqrt(self.rho_Si*self.modulus())*self.w*self.t^2/(self.l*R*(1+R/delta)*eta_f);
+      Q = k_0^2/(12*pi*sqrt(3))*sqrt(self.rho_cantilever*self.modulus())*self.w*self.t^2/(self.l*R*(1+R/delta)*eta_f);
       Q = min(Q, cantilever.maxQ);
     end
     
@@ -1058,7 +816,13 @@ classdef cantilever
     
     % Calculate kappa for the first mode
     function kappa = kappa(self)
-      C = 1.8751; % For the first resonant mode. Higher modes can be found by solving 1+cos(x)*cosh(x) = 0
+      % Not used currently (for speed reasons), but kappa can be calculated for higher order modes
+      %       C_n(1) = fzero(@(x) 1+cos(x)*cosh(x),1);
+      %       C_n(2) = fzero(@(x) 1+cos(x)*cosh(x),5);
+      %       C_n(3) = fzero(@(x) 1+cos(x)*cosh(x),7);
+      %       C_n(4) = fzero(@(x) 1+cos(x)*cosh(x),10);
+      %       C = C_n(1); % Right now only for 1st order modes
+      C = 1.8751;
       kappa = C * self.w / self.l;
     end
     
@@ -1096,37 +860,14 @@ classdef cantilever
       % Calculate the voltage noise parameters
       whiteNoiseSigma = self.voltage_noise(self.freq_max);
       fCorner = self.knee_frequency();
-      nyquistFreq = Fs/2;
-      overSampleRatio = nyquistFreq/self.freq_max;
+      overSampleRatio = Fs/(2*self.freq_max);
 
       % Generate voltage noise that matches the calculated spectrum
       bandwidth = self.freq_max - self.freq_min;
       whiteNoise = sqrt(bandwidth)*whiteNoiseSigma*randn(size(t))*sqrt(overSampleRatio);
-      totalNoise = whiteNoise; % So that the RMS noise matches what I expect
-      forceNoise = totalNoise/self.force_sensitivity();
-
-      % For generating 1/f^2 noise
-      % pinkNoise = 2*pi*cumsum(whiteNoise_forPink)*fCorner*sqrt(whiteNoiseSigma)/overSampleRatio;
-      
+      pinkNoise = 2*pi*cumsum(whiteNoise)*fCorner*sqrt(whiteNoiseSigma)/overSampleRatio;
+      totalNoise = whiteNoise + pinkNoise;
       voltageNoise = [t' totalNoise'];
-      
-      % For checking that the numbers make sense
-%       rmsVoltageNoise = sqrt(mean(totalNoise.^2))
-%       expectedRmsVoltageNoise = whiteNoiseSigma*sqrt(nyquistFreq)
-%       
-%       rmsForceNoise = sqrt(mean(forceNoise.^2))
-%       expectedRmsForceNoise = self.force_resolution()
-%       pause
-%       
-%       figure
-%       plot(t, 1e3*totalNoise)
-%       xlabel('Time (s)');
-%       ylabel('Output Referred Voltage Noise (mV)');
-%       
-%       figure
-%       plot(t, 1e12*totalNoise/self.force_sensitivity())
-%       xlabel('Time (s)');
-%       ylabel('Output Referred Force Noise (pN)');
     end
     
     function [tSim, inputForce, actualForce, sensorForce] = simulateForceStep(self, tMax, Fs, forceMagnitude, forceDelay, forceHold)
@@ -1183,7 +924,7 @@ classdef cantilever
       hold all
 
       % Do an initial simulation to find the expected trajectory
-      [tSim, tmp, actualForce, tmp] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
+      [tSim, inputForce, actualForce, sensorForce] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
       
       % Fill in the grey background and draw the black nominal force line
       x = 1e6*[tSim ; flipud(tSim)];
@@ -1195,27 +936,11 @@ classdef cantilever
       patch(x, y, [.6 .6 .6], 'EdgeColor', 'none')      
       
       % Do the simulations and plot
-      colorBase = [11/255 132/255 199/255];
       for ii = 1:numSims
-        randomColor = randn(1,3)*0.2;
-        color = colorBase + randomColor;
-        color(color>1) = 1;
-        color(color<0) = 0;
-        
-        [tSim, tmp, actualForce, sensorForce] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
-        sensorForceAll(:, ii) = sensorForce;
-        plot(1e6*tSim, 1e12*sensorForce, 'Color', color)
+        [tSim, inputForce, actualForce, sensorForce] = self.simulateForceStep(tMax, Fs, forceMagnitude, forceDelay, forceHold);
+        plot(1e6*tSim, 1e12*sensorForce, 'Color', [11/255 132/255 199/255])
       end
       plot(1e6*tSim, 1e12*actualForce, '-', 'Color', [0 0 0], 'LineWidth', 3);      
-      hold off
-      xlabel('Time (microseconds)');
-      ylabel('Output (pN)');
-      
-      averageSensorForce = mean(sensorForceAll, 2);
-      figure
-      hold all;
-      plot(1e6*tSim, 1e12*actualForce, '-', 'Color', [0 0 0], 'LineWidth', 3);            
-      plot(1e6*tSim, 1e12*averageSensorForce, '-', 'Color', [.5 .5 .5], 'LineWidth', 2);      
       hold off
       xlabel('Time (microseconds)');
       ylabel('Output (pN)');
@@ -1245,283 +970,10 @@ classdef cantilever
     end
     
     
-    % Used by optimization to bring all state varibles to O(1)
-    function scaling = optimization_scaling(self)
-      l_scale = 1e6;
-      w_scale = 1e6;
-      t_scale = 1e9;
-      l_pr_ratio_scale = 10;
-      v_bridge_scale = 1;
-      
-      scaling = [l_scale, w_scale, t_scale, l_pr_ratio_scale, v_bridge_scale, self.doping_optimization_scaling()];
-      
-      % Actuator specific code
-      switch self.cantilever_type
-        case 'step'
-          % Do nothing special
-        case 'thermal'
-          l_a_scale = 1e6;
-          w_a_scale = 1e6;
-          t_a_scale = 1e9;
-          v_actuator_scale = 1;
-          R_heater_scale = 1e-3;
-          scaling = [scaling l_a_scale w_a_scale t_a_scale v_actuator_scale R_heater_scale];
-        case 'piezoelectric'
-          l_a_scale = 1e6;
-          w_a_scale = 1e6;
-          t_a_scale = 1e9;
-          v_actuator_scale = 1;
-          scaling = [scaling l_a_scale w_a_scale t_a_scale v_actuator_scale];
-      end
-    end
-    
-    % Update the changed optimization parameters
-    % All optimization takes place for the same object (i.e. we update 'self') so things like 'fluid' are maintained
-    function self = cantilever_from_state(self, x0)
-      scaling = self.optimization_scaling();
-      x0 = x0 ./ scaling;
-      
-      self.l = x0(1);
-      self.w = x0(2);
-      self.t = x0(3);
-      self.l_pr_ratio = x0(4);
-      self.v_bridge = x0(5);
-      
-      self = self.doping_cantilever_from_state(x0);
-      
-      % Actuator specific code
-      switch self.cantilever_type
-        case 'step'
-          % Do nothing special
-        case 'thermal'
-          self.l_a = x0(8);
-          self.w_a = x0(9);
-          self.t_a = x0(10);
-          self.v_actuator = x0(11);
-          self.R_heater = x0(12);
-        case 'piezoelectric'
-          self.l_a = x0(8);
-          self.w_a = x0(9);
-          self.t_a = x0(10);
-          self.v_actuator = x0(11);
-      end
-    end
-    
-    % Return state vector for the current state
-    function x = current_state(self)
-      x(1) = self.l;
-      x(2) = self.w;
-      x(3) = self.t;
-      x(4) = self.l_pr_ratio;
-      x(5) = self.v_bridge;
-      
-      self.doping_current_state()
-      x = [x self.doping_current_state()];
-      
-      % Actuator specific code
-      switch self.cantilever_type
-        case 'step'
-          % Do nothing special
-        case 'thermal'
-          x(8) = self.l_a;
-          x(9) = self.w_a;
-          x(10) = self.t_a;
-          x(11) = self.v_actuator;
-          x(12) = self.R_heater;
-        case 'piezoelectric'
-          x(8) = self.l_a;
-          x(9) = self.w_a;
-          x(10) = self.t_a;
-          x(11) = self.v_actuator;
-      end
-    end
-    
-    % Set the minimum and maximum bounds for the cantilever state variables.
-    % Bounds are written in terms of the initialization variables.
-    % Secondary constraints (e.g. power dissipation, resonant frequency) are applied in optimization_constraints()
-    function [lb ub] = optimization_bounds(self, parameter_constraints)
-      
-      min_l = 10e-6;
-      max_l = 2e-3;
-      
-      min_w = 2e-6;
-      max_w = 20e-6;
-      
-      min_t = 1e-6;
-      max_t = 10e-6;
-      
-      min_l_pr_ratio = 0.01;
-      max_l_pr_ratio = 0.99;
-      
-      min_v_bridge = 0.1;
-      max_v_bridge = 10;
-      
-      [doping_lb doping_ub] = self.doping_optimization_bounds(parameter_constraints);
-      
-      actuator_lb = [];
-      actuator_ub = [];
-      % Actuator specific code
-      switch self.cantilever_type
-        case {'step', 'none'}
-          % Override the default values if any were provided
-          % constraints is a set of key value pairs, e.g.
-          % constraints = {{'min_l', 'max_v_bridge'}, {5e-6, 10}}
-          if ~isempty(parameter_constraints)
-            keys = parameter_constraints{1};
-            values = parameter_constraints{2};
-            for ii = 1:length(keys)
-              eval([keys{ii} '=' num2str(values{ii}) ';']);
-            end
-          end
-        case 'thermal'
-          min_l_a = 5e-6;
-          max_l_a = 200e-6;
-          
-          min_w_a = 2e-6;
-          max_w_a = 50e-6;
-          
-          min_t_a = 200e-9;
-          max_t_a = 3e-6;
-          
-          min_v_actuator = .1;
-          max_v_actuator = 10;
-          
-          min_R_heater = 200;
-          max_R_heater = 5e3;
-
-          % Override the default values if any were provided
-          % constraints is a set of key value pairs, e.g.
-          % constraints = {{'min_l', 'max_v_bridge'}, {5e-6, 10}}
-          if ~isempty(parameter_constraints)
-            keys = parameter_constraints{1};
-            values = parameter_constraints{2};
-            for ii = 1:length(keys)
-              eval([keys{ii} '=' num2str(values{ii}) ';']);
-            end
-          end
-          
-          actuator_lb = [min_l_a min_w_a min_t_a min_v_actuator min_R_heater];
-          actuator_ub = [max_l_a max_w_a max_t_a max_v_actuator max_R_heater];
-        case 'piezoelectric'
-          min_l_a = 5e-6;
-          max_l_a = 200e-6;
-          
-          min_w_a = 2e-6;
-          max_w_a = 30e-6;
-          
-          min_t_a = 200e-9;
-          max_t_a = 3e-6;
-          
-          min_v_actuator = .1;
-          max_v_actuator = 10;
-
-          % Override the default values if any were provided
-          % constraints is a set of key value pairs, e.g.
-          % constraints = {{'min_l', 'max_v_bridge'}, {5e-6, 10}}
-          if ~isempty(parameter_constraints)
-            keys = parameter_constraints{1};
-            values = parameter_constraints{2};
-            for ii = 1:length(keys)
-              eval([keys{ii} '=' num2str(values{ii}) ';']);
-            end
-          end
-          
-          actuator_lb = [min_l_a min_w_a min_t_a min_v_actuator];
-          actuator_ub = [max_l_a max_w_a max_t_a max_v_actuator];
-      end
-
-      lb = [min_l, min_w, min_t, min_l_pr_ratio, min_v_bridge, doping_lb, actuator_lb];
-      ub = [max_l, max_w, max_t, max_l_pr_ratio, max_v_bridge, doping_ub, actuator_ub];
-    end
-    
-    function x0 = initial_conditions_random(self, parameter_constraints)
-      [lb, ub] = self.optimization_bounds(parameter_constraints);
-      
-      % Random generation bounds. We use the conditions from
-      % optimization_bounds so that we don't randomly generate
-      % something outside of the allowable bounds.
-      l_min = lb(1);
-      l_max = ub(1);
-      
-      w_min = lb(2);
-      w_max = ub(2);
-      
-      t_min = lb(3);
-      t_max = ub(3);
-      
-      l_pr_ratio_min = lb(4);
-      l_pr_ratio_max = ub(4);
-      
-      V_b_min = lb(5);
-      V_b_max = ub(5);
-      
-      % Generate the random values
-      l_random = l_min + rand*(l_max - l_min);
-      w_random = w_min + rand*(w_max - w_min);
-      t_random = t_min + rand*(t_max - t_min);
-      l_pr_ratio_random = l_pr_ratio_min + rand*(l_pr_ratio_max - l_pr_ratio_min);
-      v_bridge_random = V_b_min + rand*(V_b_max - V_b_min);
-      
-      x0_doping = self.doping_initial_conditions_random(parameter_constraints);
-      
-      x0_actuator = [];
-      % Actuator specific code
-      switch self.cantilever_type
-        case 'thermal'
-          l_a_min = lb(8);
-          l_a_max = ub(8);
-          
-          w_a_min = lb(9);
-          w_a_max = ub(9);
-          
-          t_a_min = lb(10);
-          t_a_max = ub(10);
-          
-          v_actuator_min = lb(11);
-          v_actuator_max = ub(11);
-          
-          R_heater_min = lb(12);
-          R_heater_max = ub(12);
-          
-          l_a_random = l_a_min + rand*(l_a_max - l_a_min);
-          w_a_random = w_a_min + rand*(w_a_max - w_a_min);
-          t_a_random = t_a_min + rand*(t_a_max - t_a_min);
-          v_actuator_random = v_actuator_min + rand*(v_actuator_max - v_actuator_min);
-          R_heater_random = R_heater_min + rand*(R_heater_max - R_heater_min);
-          x0_actuator = [l_a_random w_a_random t_a_random v_actuator_random R_heater_random];
-        case 'piezoelectric'
-          l_a_min = lb(8);
-          l_a_max = ub(8);
-          
-          w_a_min = lb(9);
-          w_a_max = ub(9);
-          
-          t_a_min = lb(10);
-          t_a_max = ub(10);
-          
-          v_actuator_min = lb(11);
-          v_actuator_max = ub(11);
-          
-          l_a_random = l_a_min + rand*(l_a_max - l_a_min);
-          w_a_random = w_a_min + rand*(w_a_max - w_a_min);
-          t_a_random = t_a_min + rand*(t_a_max - t_a_min);
-          v_actuator_random = v_actuator_min + rand*(v_actuator_max - v_actuator_min);
-          x0_actuator = [l_a_random w_a_random t_a_random v_actuator_random];
-      end
-      
-      x0 = [l_random, w_random, t_random, l_pr_ratio_random, v_bridge_random, x0_doping, x0_actuator];
-    end
-    
     % Nonlinear optimization constraints. For a feasible design, all constraints are negative.
     function [C, Ceq] = optimization_constraints(self, x0, nonlinear_constraints)
       
       c_new = self.cantilever_from_state(x0);
-      
-      % Default aspect ratios that can be overriden
-      min_w_t_ratio = 3;
-      min_l_w_ratio = 3;
-      min_pr_l_w_ratio = 2;
-      min_pr_l = 5e-6;
       
       % Read out the constraints as key-value pairs, e.g. {{'omega_min_hz', 'min_k'}, {1000, 10}}
       if ~isempty(nonlinear_constraints)
@@ -1542,7 +994,7 @@ classdef cantilever
           case 'vacuum'
             freq_constraint = omega_min_hz - c_new.omega_vacuum_hz();
           otherwise
-            [omega_damped_hz, tmp] = c_new.omega_damped_hz_and_Q();
+            [omega_damped_hz, Q] = c_new.omega_damped_hz_and_Q();
             freq_constraint = omega_min_hz - omega_damped_hz;
         end
         C = [C freq_constraint];
@@ -1556,13 +1008,13 @@ classdef cantilever
       
       % Temp constraints
       if exist('tip_temp', 'var')
-        [tmp, TTip] = c_new.approxTempRise();
+        [TMax TTip] = c_new.approxTempRise();
         temp_constraint = TTip - tip_temp;
         C = [C temp_constraint];
       end
       
       if exist('max_temp', 'var')
-        [TMax, tmp] = c_new.approxTempRise();
+        [TMax TTip] = c_new.approxTempRise();
         temp_constraint = TMax - max_temp;
         C = [C temp_constraint];
       end
@@ -1578,28 +1030,23 @@ classdef cantilever
         C = [C max_k_constraint];
       end
       
-      if exist('max_v_actuator', 'var')
-        max_v_actuator_constraint = c_new.v_actuator - max_v_actuator;
-        C = [C max_v_actuator_constraint];
+      
+      % Cantilevera and PR aspect ratios
+      if exist('min_l_w_ratio', 'var')
+        length_width_ratio = min_l_w_ratio - c_new.l/c_new.w;
+        C = [C length_width_ratio];
       end
       
-      if exist('min_tip_deflection', 'var')
-        min_tip_deflection_constraint = min_tip_deflection - c_new.tipDeflection();
-        C = [C min_tip_deflection_constraint];
+      if exist('min_w_t_ratio', 'var')
+        width_thickness_ratio = min_w_t_ratio - c_new.w/c_new.t;
+        C = [C width_thickness_ratio];
       end
       
-      % Aspect ratio constraints. Default ratios can be changed.
-      length_width_ratio = min_l_w_ratio - c_new.l/c_new.w;
-      C = [C length_width_ratio];
-
-      width_thickness_ratio = min_w_t_ratio - c_new.w/c_new.t;
-      C = [C width_thickness_ratio];
-
-      pr_length_width_ratio = min_pr_l_w_ratio - c_new.l_pr()/c_new.w_pr();
-      C = [C pr_length_width_ratio];
+      if exist('min_pr_l_w_ratio', 'var')
+        pr_length_width_ratio = min_pr_l_w_ratio - c_new.l_pr()/c_new.w_pr();
+        C = [C pr_length_width_ratio];
+      end
       
-      pr_length_constraint = min_pr_l - c_new.l_pr();
-      C = [C pr_length_constraint];
       
       % Now for equality based constraints
       Ceq = [];
@@ -1610,18 +1057,13 @@ classdef cantilever
         Ceq = [Ceq fixed_k_constraint];
       end
       
-      if exist('fixed_v_bridge', 'var')
-        fixed_v_bridge_constraint = c_new.v_bridge - fixed_v_bridge;
-        Ceq = [Ceq fixed_v_bridge_constraint];
-      end
-      
       % Fix the resonant frequency
       if exist('fixed_f0', 'var')
         switch self.fluid
           case 'vacuum'
             fixed_f0_constraint = omega_min_hz - c_new.omega_vacuum_hz();
           otherwise
-            [omega_damped_hz, tmp] = c_new.omega_damped_hz_and_Q();
+            [omega_damped_hz, Q] = c_new.omega_damped_hz_and_Q();
             fixed_f0_constraint = omega_min_hz - omega_damped_hz;
         end
         Ceq = [Ceq fixed_f0_constraint];
@@ -1645,6 +1087,7 @@ classdef cantilever
         
         % If the optimization terminated abnormally (e.g. constraints not satisfied), skip to the next iteration
         if ~(exitflag == 1 || exitflag == 2)
+          c{ii}
           continue
         end
         
@@ -1687,14 +1130,12 @@ classdef cantilever
     % Optimize, but don't randomize starting point
     function optimized_cantilever = optimize_performance_from_current(self, parameter_constraints, nonlinear_constraints, goal)
       randomize_starting_conditions = 0;
-      [optimized_cantilever, tmp] = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
+      [optimized_cantilever, exitflag] = self.optimize_performance_once(parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions);
     end
     
     function [optimized_cantilever, exitflag] = optimize_performance_once(self, parameter_constraints, nonlinear_constraints, goal, randomize_starting_conditions)
       
       scaling = self.optimization_scaling();
-      
-      self.check_valid_cantilever();
       
       % If random_flag = 1, start from random conditions. Otherwise
       % start from the current cantilever state vector
@@ -1703,6 +1144,10 @@ classdef cantilever
       else
         problem.x0 = scaling.*self.current_state();
       end
+      
+%       % To ensure that we don't have a bad initial point
+%       check_lever = self.cantilever_from_state(problem.x0);
+%       check_lever.print_performance()
       
       if goal == cantilever.goalForceResolution
         problem.objective = @self.optimize_force_resolution;
@@ -1728,7 +1173,7 @@ classdef cantilever
       
       problem.nonlcon = @(x) self.optimization_constraints(x, nonlinear_constraints);
       
-      [x, tmp, exitflag] = fmincon(problem);
+      [x, fval, exitflag] = fmincon(problem);
       optimized_cantilever = self.cantilever_from_state(x);
     end
   end
