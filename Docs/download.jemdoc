@@ -14,10 +14,10 @@ piezoD is composed of several Matlab classes. You can download official releases
 
 The versions posted here will lag behind the actual code development. The most recent code and detailed changes can be found at the [http://github.com/jcdoll/PiezoD/commits/master/ github] page.
 
-piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used.
+piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used. Installation is just a matter of placing the following files in your Matlab path.
+- cantilever.m
+- cantilever_diffusion.m
+- cantilever_epitaxy.m
+- cantilever_piezoelectric.m
 
-Installation is just a matter of placing *cantilever.m*, *cantilever_diffusion.m*, *cantilever_epitaxy.m* and *PECantilever.m" in your Matlab path. You can check that it works by running *sample_code.m*.
-
-Please request any new features and report bugs [http://github.com/jcdoll/PiezoD/issues here].
-
-*Important:* if piezoD seems to be running slowly, try running /clear/ twice before running it again.
+You can check that it works by running *sample_code.m*. Please request any new features and report bugs [http://github.com/jcdoll/PiezoD/issues here].
