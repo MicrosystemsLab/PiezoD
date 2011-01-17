@@ -19,8 +19,8 @@ classdef cantilever_diffusion < cantilever
     function print_performance(self)
       print_performance@cantilever(self); % print the base stuff
       fprintf('Diffusion time (mins), temp (C): %f %f \n', self.diffusion_time/60, self.diffusion_temp-273);
-      fprintf('Junction depth (nm): %f', self.junction_depth()*1e9);
-      fprintf('\n')
+      fprintf('Junction depth (nm): %f \n', self.junction_depth()*1e9);
+      fprintf('=======================\n\n')
     end
     
     function print_performance_for_excel(self, varargin)
@@ -53,10 +53,10 @@ classdef cantilever_diffusion < cantilever
     % Calculate the diffusion profile for a constant surface source
     % diffusion using self.diffusion_time and self.diffusion_temp as
     % as well as self.doping_type
-    function [x, doping] = doping_profile(self)
-      N_background = 1e14; % N/cm^3
+    function [x, active_doping, total_doping] = doping_profile(self)
+      N_background = 1e15; % N/cm^3
       N_surface = 1e20; % N/cm^3
-      n_points = 10e2; % # of points of doping profile
+      n_points = self.numZPoints; % # of points of doping profile
       
       switch self.doping_type
         case 'arsenic'
@@ -68,9 +68,10 @@ classdef cantilever_diffusion < cantilever
           diffusion_length = sqrt(D*self.diffusion_time)*1e-2; % cm -> m
           
           junction_depth = 2*diffusion_length*erfcinv(N_background/N_surface);
-          x = linspace(0, junction_depth, n_points);
+          x = linspace(0, self.t, n_points);
           
-          doping = N_surface*erfc(x/(2*diffusion_length));
+          active_doping = N_surface*erfc(x/(2*diffusion_length));
+          total_doping = active_doping;
           
         case 'boron'
           D_0 = 1.0;
@@ -81,67 +82,79 @@ classdef cantilever_diffusion < cantilever
           diffusion_length = sqrt(D*self.diffusion_time)*1e-2; % cm -> m
           
           junction_depth = 2*diffusion_length*erfcinv(N_background/N_surface);
-          x = linspace(0, junction_depth, n_points);
+          x = linspace(0, self.t, n_points);
           
-          doping = N_surface*erfc(x/(2*diffusion_length));
+          active_doping = N_surface*erfc(x/(2*diffusion_length));
+          total_doping = active_doping;
           
-          % A model for phosphorus diffusion which accounts for the
-          % kink. Takes the solid solubility to be 2.1e20/cc, which
-          % is accurate for ~850C diffusion temp.
+        % A model for phosphorus diffusion which accounts for the
+        % kink. Takes the solid solubility to be 2.1e20/cc, which
+        % is accurate for ~850C diffusion temp.
         case 'phosphorus'
           k_b_eV = 8.617343e-5;
           x = linspace(0, self.t*1e2, n_points); % m -> cm
-          T = self.diffusion_temp;
-          t = self.diffusion_time;
           
-          % Temperature dependent solid solubility for phosphorus
-          % from the Trumbore data included in the TSuprem manual
-          SS_temp = [650 700 800 900 1000 1100] + 273; %K
-          SS_phos = [1.2e20 1.2e20 2.9e20 6e20 1e21 1.2e21]; % N/cc
-          SS_phosfit = polyfit(SS_temp, SS_phos, 2);
+          % Current (7/18/10)
+          if self.diffusion_temp < 780+273
+            time_offset = 0;
+          else
+            time_offset = 2;
+          end
           
-          % % For debuggin the fit
-          % figure
-          % hold all
-          % plot(SS_temp, SS_phos, 'o');
-          % plot(SS_temp, polyval(SS_phosfit, SS_temp));
-          % hold off
-          % pause
+          % Alpha activation energy varies quadratically with temp
+          T_values = 273+[775 800 850 950];
+          Ea_values = [1.755 1.73 1.71 1.66];
+          p = polyfit(T_values, Ea_values, 2);
+          Ea_alpha = polyval(p, self.diffusion_temp);
+          alpha = .18*exp(-Ea_alpha./(k_b_eV*self.diffusion_temp));
           
-          Cs = polyval(SS_phosfit, T)*.5; % factor of 1/2 to fit experimentally observed data
+          Da = 100*exp(-3.77/k_b_eV/self.diffusion_temp);
+          Db = 2.3*exp(-1.95./(k_b_eV*self.diffusion_temp))*1e-5;
+          Cb = 3*exp(-0.88./(k_b_eV*self.diffusion_temp))*1e23;
           
+          t = self.diffusion_time + time_offset*60; % Add 3 minutes diffusion time for the oxidation and purge steps after the diffusion
           
-          %                     alpha = .18*exp(-1.75/k_b_eV/T);
-          %                     Da = 200*exp(-3.77/k_b_eV/T);
-          %                     Db = 1.2*exp(-3/k_b_eV/T);
-          %                     Cb = 3.5*exp(-0.9/k_b_eV/T)*1e23;
+          % Temperature dependent electrically active concentration (from Solmi and Nobili)
+          surface_concentration_total = 2.5e23*exp(-0.62./(k_b_eV*self.diffusion_temp));
+          surface_concentration_active = 1.1e22*exp(-0.37./(k_b_eV*self.diffusion_temp));
           
-          alpha = 6e2*exp(-2.45/k_b_eV/T);
-          Da = 100*exp(-3.77/k_b_eV/T);
-          Db = .8*exp(-3/k_b_eV/T);
-          Cb = 1.5*exp(-0.9/k_b_eV/T)*1e23;
-          
+          % Calculate the profile
           x0 = alpha*t;
-          kappa = Cb/Cs;
+          kappa = Cb/surface_concentration_total;
           
           F1 = erfc((x+alpha*t)/(2*sqrt(Da*t))) + erfc((x-3*alpha*t)/(2*sqrt(Da*t)));
           F2 = erfc((x+alpha*t)/(2*sqrt(Db*t))) + erfc((x-3*alpha*t)/(2*sqrt(Db*t)));
           
-          Ca = (1-kappa)/2*Cs*exp(-alpha/(2*Da)*(x-alpha*t)).*F1;
-          Cb = kappa/2*Cs*exp(-alpha/(2*Db)*(x-alpha*t)).*F2;
+          Ca = (1-kappa)/2*surface_concentration_total*exp(-alpha/(2*Da)*(x-alpha*t)).*F1;
+          Cb = kappa/2*surface_concentration_total*exp(-alpha/(2*Db)*(x-alpha*t)).*F2;
           
-          C = Ca + Cb;
-          C(find(x <= x0)) = Cs;
-          C(find(C < 1e15)) = 1e15;
-          doping = C;
+          C_total = Ca + Cb;
+          C_total(find(C_total < 1e15)) = 1e15;
+          C_total(x <= x0) = surface_concentration_total;
+          total_doping = C_total;
+          
+          C_active = C_total;
+          C_active(C_active >= surface_concentration_active) = surface_concentration_active;
+          active_doping = C_active;    
+          
           x = x*1e-2; % cm -> m
       end
-      
+    end
+
+    function plot_doping_profile(self)
+      [x, active_doping, total_doping] = self.doping_profile();
+      figure
+      hold all
+      plot(x, total_doping)
+      plot(x, active_doping)
+      hold off
+      set(gca, 'yscale', 'log');
+      xlim([0 self.t])
     end
     
     function x_j = junction_depth(self)
-      [x, doping] = self.doping_profile();
-      x_j = x(find(doping == 1e15, 1));
+      [x, active_doping, total_doping] = self.doping_profile();
+      x_j = x(find(active_doping == 1e15, 1));
     end
     
     % ==================================
@@ -170,8 +183,8 @@ classdef cantilever_diffusion < cantilever
     % piezoresistor thickness rather than ratio, resonant frequency)
     % are applied in optimization_constraints()
     function [lb ub] = doping_optimization_bounds(self, parameter_constraints)
-      min_diffusion_time = 10*60; % seconds
-      max_diffusion_time = 60*60;
+      min_diffusion_time = 5*60; % seconds
+      max_diffusion_time = 90*60;
       
       min_diffusion_temp = 273+800; % K
       max_diffusion_temp = 273+1000;

@@ -24,37 +24,47 @@
 <div id="toptitle">
 <h1>piezoD - piezoresistive and piezoelectric cantilever design optimization</h1>
 </div>
-<p>piezoD is a tool for optimizing the sensing performance of piezoresistive and piezoelectric microcantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design cantilevers.</p>
-<h1>features</h1>
+<p>piezoD is a tool for modeling the performance and optimizing the design of piezoresistive and piezoelectric microcantilevers. It is written in object oriented Matlab, and is designed to make it fast and easy to design high performance cantilevers.</p>
+<p>Features include: </p>
 <ul>
 <li><p>materials</p>
 <ul>
 <li><p>p-type and n-type single crystal silicon piezoresistive cantilevers</p>
 </li>
+<li><p>epitaxial or surface diffusion based fabrication</p>
+</li>
 <li><p>aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers</p>
+</li>
+<li><p><b>(coming soon)</b> lookup table based ion implantation fabrication</p>
+</li>
+<li><p><b>(coming soon)</b> polycrystalline silicon and thin metal film cantilevers</p>
 </li></ul>
 </li>
-<li><p>performance model</p>
+<li><p>performance modeling</p>
 <ul>
-<li><p>noise: 1/f, johnson, amplifier</p>
+<li><p>noise: 1/f, johnson, amplifier, thermomechanical</p>
 </li>
-<li><p>sensitivity: concentration dependent piezoresistance factor</p>
+<li><p>mechanics: Bernoulli beam bending with accurate stiffness and resonant frequency for multilayer, segmented structures</p>
 </li>
-<li><p>doping methods: epitaxy, diffusion, including solid solubility limitations</p>
+<li><p>concentration and temperature dependent effects: thermal conductivity, carrier density and mobility, piezoresistance factor</p>
+</li>
+<li><p>fluid damping: resonant frequency and quality factor</p>
+</li>
+<li><p>temperature profile: finite difference, lumped, and linearized circuit models for self-heating</p>
 </li></ul>
 </li>
 <li><p>constraints available</p>
 <ul>
 <li><p>simple bounds: all design parameters, e.g. cantilever length, bias voltage</p>
 </li>
-<li><p>general nonlinear constraints: power dissipation, temperature, resonant frequency (vacuum or fluid), resistance, spring constant</p>
+<li><p>general nonlinear constraints: power dissipation, temperature, resonant frequency, resistance, spring constant, etc</p>
 </li></ul>
 </li>
 <li><p>optimization targets</p>
 <ul>
-<li><p>force resolution</p>
+<li><p>integrated noise (force, displacement, surface stress)</p>
 </li>
-<li><p>displacement resolution</p>
+<li><p>noise power spectral density (force, displacement, surface stress)</p>
 </li>
 </ul>
 
@@ -66,7 +76,7 @@
 <p>piezoD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the <a href="http://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License</a> for more details.</p>
 <div id="footer">
 <div id="footer-text">
-Page generated 2010-06-17 14:40:25 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2011-01-16 22:29:19 PST, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

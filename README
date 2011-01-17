@@ -1,80 +1,42 @@
-=================== General Notes =================== 
+* Introduction
+PiezoD is a set of Matlab classes that implement analytical models for piezoresistive and piezoelectric sensor cantilever performance. Several types of piezoresistive cantilevers are supported: 1) single crystal silicon doped via diffusion, epitaxy or ion implantation, 2) polycrystalline silicon and metals, and 3) piezoelectric cantilevers.
+
+
+* Overview of Analytical Models
+There are four basic parts to the analytical models: 1) mechanics, 2) electrical, 3) thermal. 
+
+For each dopant type, the elastic modulus is calculated assuming that the piezoresistors are oriented along the optimal longitudinal axis (<110> for p-type, <100> for n-type). The piezoresistance factor is calculated as a function of dopant concentration using the model presented by Richter et al in 2008.
+
+There are two models for the cantilever thermal conductivity. The first (simpler) is to calculate the temperature-independent thermal conductivity. If cantilever self-heating is small, then this is a good approximation. If the self-heating is substantial (e.g. temperature rises of >200C), then a more complicated k(T) model can be used.
+
+
+* Circuit Assumptions
+We assume that you're using a 1/4-active Wheatstone bridge and measuring the signal using an instrumentation amplifier. The noise characteristics of the INA103 and the AD8221 are currently included in the code and can be chosen by setting a flag.
+
+
+* Optimization
+Optimization is performed using fmincon, a Matlab function that is part of the Optimization Toolbox. It implements an l-bfgs-b optimizer that handles nonlinear constraints and uses finite differences to approximate the Hessian (matrix of second derivatives used in the optimization). The code supplies the model functions to the optimizer, allowing the optimization target (e.g. force resolution) to be calculated and its derivatives with respect to each of the active design parameters to be calculated. The design paramters vary by about 29 orders of magnitude in size (thickness ~ 100nm to dopant concentration ~ 1e20/cc), so the parameters are scaled to O(1) each iteration. There are several possible optimization goals that can be set by a flag - integrated force resolution, integrated displacement resolution, and force noise at a particular frequency (i.e. resonant sensing).
+
+
 * Usage
-      Create a cantilever
-          c = cantilever_diffusion(1e0, 1e3, 100e-6, 50e-6, 10e-6, 0.5,
-          0.5, 0.5, 5, 'boron', 20*60, 1000)
-
-      Calculate some useful properties
-          resistance = c.resistance();
-          sensitivity = c.force_sensitivity();
-          [omega_d, Q] = c.omega_damped_hz_quality_factor();
-
-      Design a better cantilever
-          c_optimized = c.optimize_performance(3.5e-3, 5e3, 'water',
-              30e-9, 1e-6, 5)
-
-      More code is included in sample_code.m
-
-      The code accounts for dopant type, adjusting the elastic modulus
-      and piezoresistive coefficient accordingly. Phosphorus, boron and
-      arsenic are supported, although the piezoresistive coefficient
-      calculator is based upon Harley's fit to experimental data which is
-      only for Boron.
-
-* Optimization Scaling
-      fmincon and other l-bfgs-b optimization routines don't work
-      particularly well if there's a large difference in the size of the
-      parameters it is tweaking. After each iteration it finds the
-      sensitivity of the variable to optimize with respect to a change in
-      the other variables. If dopant concentration is 1e19 per cc and
-      voltage is 5V, a unit change for each variable will have very
-      different effects on the optimization output, and bfgs won't know
-      what to do.
-      This problem is solved by scaling the variables back to O(1)
-      before putting them into the optimization code. Careful steps are
-      taken in order to calculate the optimization goal accurately and
-      rescaling the parameters at the proper time between iterations.
-
-* Extending the Code
-      Cantilever is the abstract base class that implements most of the
-      details. In order to actually do anything, you need to implement
-      a base class which implements at least these methods:
-          doping_profile
-          optimization_scaling
-          cantilever_from_state
-          optimize_performance
-          optimization_constraints
-
-      You might also want to change or override, but it's optional
-          print_performance
-          print_performance_for_excel
-          optimization_constraints
-
-      In order to demonstrate how you might do this, and to design some
-      cantilevers, we have created and included cantilever_epitaxy and
-      cantilever_diffusion.
-
-      Right now the code is oriented towards optimization force
-      resolution, but it is easy to extend it to other variables. You
-      would just need to modify your optimize_performance function.
-
-* Assumptions
-      You're using the INA103 amplifier with a gain of at least 100. This
-      determines the input referred voltage noise of the amplifier.
+Examples are provided in sample_code.m.
 
 
+* Code Structure and Extending the Code
+Cantilever is the abstract base class that implements most of the details. In order to extend the code (i.e. alternative doping methods), you need to extend cantilever.m and implement these methods:
+  doping_profile
+  optimization_scaling
+  cantilever_from_state
+  optimize_performance
+  optimization_constraints
 
-=================== Development =================== 
+You probably also would want to override
+  print_performance
+  print_performance_for_excel
+  optimization_constraints
 
-To push:
-git push github
-
-where your .git/config file has a github remote entry set up
-
-[remote "github"]
-        url = git@github.com:username/myproject.git
-        fetch = +refs/heads/*:refs/remotes/github/*
-        push = refs/heads/*:refs/heads/*
+For an example of how to do this, take a look at cantilever_diffusion.m and cantilever_epitaxy.m.
 
 
-
+* Development
+Version control is provided by git, and code hosting is provided by github. To download the code and setup your git repository, go to: http://github.com/jcdoll/PiezoD. Assuming that you already have git installed, the fastest way to get started would be to run: git clone http://github.com/jcdoll/PiezoD.git.

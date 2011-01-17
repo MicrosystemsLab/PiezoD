@@ -45,21 +45,25 @@ classdef cantilever_epitaxy < cantilever
       fprintf(fid, '\n');
     end
     
-    % ==================================
-    % ======== Doping Profile  =========
-    % ==================================
     
-    % Return the diffusion profile down to the junction depth
-    function [x, doping] = doping_profile(self)
-      n_points = 5e2; % # of points of doping profile
-      x = linspace(0, self.junction_depth(), n_points);
-      doping = ones(1, n_points)*self.dopant_concentration;
+    
+    % ======== Doping Profile  =========
+    % Return the electrically active dopant concentration profile through the cantilever thickness
+    % Units: cm^-3
+    function [z, active_doping, total_doping] = doping_profile(self)
+      n_points = self.numZPoints; % # of points of doping profile
+      z = linspace(0, self.t, n_points);
+
+      % Initialize to the background concentration
+      background_concentration = 1e15;
+      active_doping = ones(1, n_points)*background_concentration;
+
+      % Fill in the epitaxial region, assume active = total
+      active_doping(z<=self.junction_depth()) = self.dopant_concentration;
+      total_doping = active_doping;
     end
     
-    % ==================================
     % ========= Optimization  ==========
-    % ==================================
-    
     function scaling = doping_optimization_scaling(self)
       concentration_scale = 1e-18;
       t_pr_ratio_scale = 10;

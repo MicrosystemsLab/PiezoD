@@ -1,23 +1,28 @@
 # jemdoc: menu{MENU}{index.html}
 = piezoD - piezoresistive and piezoelectric cantilever design optimization
 
-piezoD is a tool for optimizing the sensing performance of piezoresistive and piezoelectric microcantilevers. It is currently written in object oriented Matlab. piezoD is designed to make it fast and easy to design cantilevers.
+piezoD is a tool for modeling the performance and optimizing the design of piezoresistive and piezoelectric microcantilevers. It is written in object oriented Matlab, and is designed to make it fast and easy to design high performance cantilevers.
 
-= features
+Features include: 
 
 - materials
  -- p-type and n-type single crystal silicon piezoresistive cantilevers
+ -- epitaxial or surface diffusion based fabrication
  -- aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers
-- performance model
- -- noise: 1/f, johnson, amplifier
- -- sensitivity: concentration dependent piezoresistance factor
- -- doping methods: epitaxy, diffusion, including solid solubility limitations
+ -- *(coming soon)* lookup table based ion implantation fabrication
+ -- *(coming soon)* polycrystalline silicon and thin metal film cantilevers
+- performance modeling
+ -- noise: 1/f, johnson, amplifier, thermomechanical
+ -- mechanics: Bernoulli beam bending with accurate stiffness and resonant frequency for multilayer, segmented structures
+ -- concentration and temperature dependent effects: thermal conductivity, carrier density and mobility, piezoresistance factor
+ -- fluid damping: resonant frequency and quality factor
+ -- temperature profile: finite difference, lumped, and linearized circuit models for self-heating
 - constraints available
  -- simple bounds: all design parameters, e.g. cantilever length, bias voltage
- -- general nonlinear constraints: power dissipation, temperature, resonant frequency (vacuum or fluid), resistance, spring constant
+ -- general nonlinear constraints: power dissipation, temperature, resonant frequency, resistance, spring constant, etc
 - optimization targets
- -- force resolution
- -- displacement resolution
+ -- integrated noise (force, displacement, surface stress)
+ -- noise power spectral density (force, displacement, surface stress)
 
 = license
 
