@@ -24,7 +24,7 @@ classdef cantilever
     fluid; % Name of the ambient fluid: 'vacuum', 'air', 'water', or 'arbitrary'. Default = 'air'.
     number_of_piezoresistors; % Number of piezoresistors in the circuit. Default = 2.
     rms_actuator_displacement_noise = 1e-10; % Displacement noise, m
-    alpha = 1e-5; % Hooge noise parameter, unitless
+    default_alpha = 1e-5; % Hooge noise parameter, unitless
     amplifier; % Name of the instr. amp, 'INA103' or 'AD8221'. Default = 'INA103'.
     T; % Ambient temp, K. Default = 300.
     T_ref; % Reference temperature for calculating thermal expansion, K. Default = 300
@@ -32,6 +32,7 @@ classdef cantilever
     R_base; % Thermal resistance at the cantilever base, K/W. Default = 1e-6
     R_contact; % Fixed electrical resistances due to contact vias, etc. Default = 100
     temperature_dependent_properties; % Include temperature dependence in calculating resistance, thermal conductivity. Default = 'no'
+    thermal_modeling; % (none), approx or exact. Used in various places, for example in calculating the PR factor
     
     % Optional parameters for modeling a stiffener or actuator at the cantilever base
     % Step stack = silicon/oxide/metal (t/t_oxide/t_a)
@@ -208,6 +209,11 @@ classdef cantilever
     doping_current_state(self)
     doping_initial_conditions_random(self)
     doping_optimization_bounds(self, parameter_constraints)
+    
+    % Treat Nz and alpha as abstract functions
+    % for cleanly handling ion implantation
+    Nz(self)
+    alpha(self)
   end
   
   % Methods for this class. Constructor class is inherited by subclasses.
@@ -246,6 +252,7 @@ classdef cantilever
       self.R_base = 1e-6; % Assume R_base is very small by default
       self.R_contact = 100; % Assume 100 ohm fixed resistances
       self.temperature_dependent_properties = 'no';
+      self.thermal_modeling = 'none'; % none, approx or exact
     end
     
     % Helpful getter function to calculate the absolute piezoresistor length
@@ -260,7 +267,21 @@ classdef cantilever
       w_pr = self.w/2;
     end
     
-    
+		
+    % boron->1, phosphorus->2, arsenic->3
+    function dopantNumber = dopantNumber(self)
+      switch self.doping_type
+        case 'boron'
+          dopantNumber = 1;
+        case 'phosphorus'
+          dopantNumber = 2;
+        case 'arsenic'
+          dopantNumber = 3;
+        otherwise
+          fprintf('ERROR: Unknown dopant type: %s\n', self.doping_type);
+          pause
+      end
+    end    
     
     % ========= Pretty output ==========    
     % Check if the cantilever is self-consistent (i.e. if type = 'thermal', l_a should be > 0
@@ -282,7 +303,6 @@ classdef cantilever
       % Calculate intermediate quantities
       [omega_damped_hz, Q] = self.omega_damped_hz_and_Q();
       [x, active_doping, total_doping] = self.doping_profile();
-      Nz = trapz(x, active_doping*1e6);
       [TMax_approx TTip_approx] = self.approxTempRise();
       [TMax, TTip] = self.calculateMaxAndTipTemp();
       thermoLimit = self.thermo_integrated()/self.force_sensitivity();
@@ -323,21 +343,22 @@ classdef cantilever
       fprintf('Johnson/Hooge: %g \n', self.johnson_integrated()/self.hooge_integrated())
       fprintf('Knee frequency (Hz): %g \n', self.knee_frequency())
       fprintf('Number of Carriers: %g \n', self.number_of_carriers());
-      fprintf('Nz: %g \n', Nz)
+      fprintf('Nz: %g \n', self.Nz())
       fprintf('\n')
       fprintf('Number of silicon resistors: %f \n', self.number_of_piezoresistors)
-      fprintf('Tip Deflection due to Doping (um): %f \n', 1e6*self.calculateDopantTipDeflection())
+%       fprintf('Tip Deflection due to Doping (um): %f \n', 1e6*self.calculateDopantTipDeflection())
       fprintf('Si Thermal Conductivity (W/m-K): %f \n', self.k_base())
       fprintf('Longitudinal Elastic Modulus (GPa): %f \n', self.modulus()*1e-9)
-      fprintf('Alpha: %g \n', self.alpha)
-      fprintf('=======================\n')
+%       fprintf('Alpha: %g \n', self.alpha)
       
       switch self.cantilever_type
         case 'none'
           % Do nothing special
         case 'step'
+          fprintf('=======================\n')
           fprintf('Step at base (um): %f thick x %f long \n', 1e6*self.t_a, 1e6*self.l_a)
         case 'thermal'
+          fprintf('=======================\n')
           [tau, freq] = self.heaterTimeConstant();
           fprintf('Actuator l/W/T: %f %f %f \n', 1e6*self.l_a, 1e6*self.w_a, 1e6*self.t_a)
           fprintf('Neutral axis (um): %f \n', 1e6*self.actuatorNeutralAxis())
@@ -391,7 +412,7 @@ classdef cantilever
         self.hooge_integrated()*1e6, self.amplifier_integrated()*1e6, ...
         self.thermo_integrated()*1e6, self.knee_frequency(), self.number_of_carriers(), ...
         1e6*self.calculateDopantTipDeflection(), self.k_x(), ...
-        self.modulus()*1e-9, self.alpha];
+        self.modulus()*1e-9];
       
       fprintf(fid, '%s \t', self.doping_type);
       fprintf(fid, '%s\t', self.fluid);
@@ -458,24 +479,6 @@ classdef cantilever
       ni = (2.4e31.*T.^3.*exp(-Eg./(self.k_b_eV.*T))).^.5;
       
       switch self.doping_type
-        case 'phosphorus'
-          mumax  = 1441;
-          c      = 0.07;
-          gamma  = 2.45;
-          mu0d   = 62.2.*Tnorm.^-0.7;
-          mu0a   = 132.*Tnorm.^-1.3;
-          mu1d   = 48.6.*Tnorm.^-0.7;
-          mu1a   = 73.5.*Tnorm.^-1.25;
-          Cr1    = 8.5e16.*Tnorm.^3.65;
-          Cr2    = 1.22e17.*Tnorm.^2.65;
-          Cs1    = 4e20;
-          Cs2    = 7e20;
-          alpha1 = .68;
-          alpha2 = .72;
-          n      = (dopantConc./2)+((dopantConc./2).^2 + ni.^2).^.5;
-          p      = ni.^2./n;
-          ND     = n;
-          NA     = p;
         case 'boron'
           mumax=470.5;
           c=0.0;
@@ -495,6 +498,42 @@ classdef cantilever
           n=ni*ni./p;
           ND=n;
           NA=p;
+        case 'phosphorus'
+          mumax  = 1441;
+          c      = 0.07;
+          gamma  = 2.45;
+          mu0d   = 62.2.*Tnorm.^-0.7;
+          mu0a   = 132.*Tnorm.^-1.3;
+          mu1d   = 48.6.*Tnorm.^-0.7;
+          mu1a   = 73.5.*Tnorm.^-1.25;
+          Cr1    = 8.5e16.*Tnorm.^3.65;
+          Cr2    = 1.22e17.*Tnorm.^2.65;
+          Cs1    = 4e20;
+          Cs2    = 7e20;
+          alpha1 = .68;
+          alpha2 = .72;
+          n      = (dopantConc./2)+((dopantConc./2).^2 + ni.^2).^.5;
+          p      = ni.^2./n;
+          ND     = n;
+          NA     = p;
+        case 'arsenic'
+          mumax  = 1441;
+          c      = 0.07;
+          gamma  = 2.45;
+          mu0d   = 55.*Tnorm.^-0.6;
+          mu0a   = 132.*Tnorm.^-1.3;
+          mu1d   = 42.4.*Tnorm.^-0.5;
+          mu1a   = 73.5.*Tnorm.^-1.25;
+          Cr1    = 8.9e16.*Tnorm.^3.65;
+          Cr2    = 1.22e17.*Tnorm.^2.65;
+          Cs1    = 2.9e20;
+          Cs2    = 7e20;
+          alpha1 = .68;
+          alpha2 = .72;
+          n      = (dopantConc./2)+((dopantConc./2).^2 + ni.^2).^.5;
+          p      = ni.^2./n;
+          ND     = n;
+          NA     = p;          
       end
       
       mu0 = (mu0d.*ND+mu0a.*NA)./(ND+NA);
@@ -532,21 +571,20 @@ classdef cantilever
     % Units: -
     function number_of_carriers = number_of_carriers(self)
       [x, active_doping, total_doping] = self.doping_profile(); % Units: x -> m, doping -> N/cm^3
-      Nz = trapz(x, active_doping*1e6); % doping: N/cm^3 -> N/m^3
       resistor_area = self.w_pr()*(2*self.l_pr() + self.w + self.air_gap_width);
-      number_of_carriers = Nz*resistor_area;
+      number_of_carriers = self.Nz()*resistor_area;
     end
     
     % 1/f voltage power spectral density for the entire Wheatstone bridge
     % Units: V^2/Hz
     function hooge_PSD = hooge_PSD(self, freq)
-      hooge_PSD = self.alpha*self.v_bridge^2*self.number_of_piezoresistors./(4*self.number_of_carriers()*freq);
+      hooge_PSD = self.alpha()*self.v_bridge^2*self.number_of_piezoresistors./(4*self.number_of_carriers()*freq);
     end
     
     % Integrated 1/f noise density for the entire Wheatstone bridge
     % Unit: V
     function hooge_integrated = hooge_integrated(self)
-      hooge_integrated = sqrt(self.alpha*self.v_bridge^2*self.number_of_piezoresistors./(4*self.number_of_carriers())*log(self.freq_max/self.freq_min));
+      hooge_integrated = sqrt(self.alpha()*self.v_bridge^2*self.number_of_piezoresistors./(4*self.number_of_carriers())*log(self.freq_max/self.freq_min));
     end
     
     % Johnson noise PSD from the entire Wheatstone bridge. Equal to that of a single resistor
@@ -554,7 +592,14 @@ classdef cantilever
     % Units: V^2/Hz
     function johnson_PSD = johnson_PSD(self, freq)
       resistance = self.resistance()/self.gamma(); % Account for gamma - can't do it in resistance() else circular ref
-      TPR = self.approxPRTemp();
+      switch self.thermal_modeling
+        case 'none'
+          TPR = self.T; % the ambient temperature
+        case 'approx'
+          TPR = self.approxPRTemp();
+        case 'exact'
+          TPR = self.averagePRTemp();
+      end
       resistance = resistance*(1 + TPR*self.TCR);
       
       if self.number_of_piezoresistors == 4
@@ -585,7 +630,14 @@ classdef cantilever
     % Units: V^2/Hz
     function thermo_PSD = thermo_PSD(self, freq)
       [omega_damped_hz, Q_M] = self.omega_damped_hz_and_Q();
-      TPR = self.approxPRTemp();
+      switch self.thermal_modeling
+        case 'none'
+          TPR = self.T; % the ambient temperature
+        case 'approx'
+          TPR = self.approxPRTemp();
+        case 'exact'
+          TPR = self.averagePRTemp();
+      end
       thermo_PSD = (self.force_sensitivity())^2 * 2*self.stiffness()*self.k_b*TPR/(pi*omega_damped_hz*Q_M) * ones(1, length(freq));
     end
     
@@ -593,7 +645,14 @@ classdef cantilever
     % Unit: V
     function thermo_integrated = thermo_integrated(self)
       [omega_damped_hz, Q_M] = self.omega_damped_hz_and_Q();
-      TPR = self.approxPRTemp();
+      switch self.thermal_modeling
+        case 'none'
+          TPR = self.T; % the ambient temperature
+        case 'approx'
+          TPR = self.approxPRTemp();
+        case 'exact'
+          TPR = self.averagePRTemp();
+      end
       thermo_integrated = sqrt((self.force_sensitivity())^2 * 2*self.stiffness()*self.k_b*TPR/(pi*omega_damped_hz*Q_M)*(self.freq_max - self.freq_min));
     end
     
@@ -623,7 +682,14 @@ classdef cantilever
       end
       
       R_effective = self.resistance()/2/self.gamma(); % resistance seen by amplifier inputs
-      TPR = self.approxPRTemp();
+      switch self.thermal_modeling
+        case 'none'
+          TPR = self.T; % the ambient temperature
+        case 'approx'
+          TPR = self.approxPRTemp();
+        case 'exact'
+          TPR = self.averagePRTemp();
+      end
       R_effective = R_effective*(1 + TPR*self.TCR);
       
       amplifier_PSD = (A_VJ^2 + 2*(R_effective*A_IJ)^2) + (A_VF^2 + 2*(R_effective*A_IF)^2)./freq;
@@ -649,7 +715,15 @@ classdef cantilever
           pause
       end
       R_effective = self.resistance()/2/self.gamma(); % resistance seen by amplifier inputs
-      TPR = self.approxPRTemp();
+
+      switch self.thermal_modeling
+        case 'none'
+          TPR = self.T; % the ambient temperature
+        case 'approx'
+          TPR = self.approxPRTemp();
+        case 'exact'
+          TPR = self.averagePRTemp();
+      end
       R_effective = R_effective*(1 + TPR*self.TCR);
       
       amplifier_integrated = sqrt(A_VJ^2*(self.freq_max - self.freq_min) + A_VF^2*log(self.freq_max/self.freq_min) + ...
@@ -661,7 +735,7 @@ classdef cantilever
     % Leads to f_knee = alpha*V_bridge^2/(16*N*S_j^2)
     % Units: Hz
     function knee_frequency = knee_frequency(self)
-      knee_frequency = self.number_of_piezoresistors*self.alpha*self.v_bridge^2/(16*self.number_of_carriers()*self.k_b*self.approxPRTemp()*self.resistance());
+      knee_frequency = self.number_of_piezoresistors*self.alpha()*self.v_bridge^2/(16*self.number_of_carriers()*self.k_b*self.approxPRTemp()*self.resistance());
     end
     
     % Integrated cantilever noise for given bandwidth
@@ -690,29 +764,31 @@ classdef cantilever
     % Uses Richter's 2008 model from "Piezoresistance in p-type silicon revisited" for the case of T=300K
     % Could be readily generalized to account for temperature as well
     function piezoresistance_factor = piezoresistance_factor(self, dopant_concentration)
-      switch self.doping_type
-        case {'boron', 'phosphorus'} % Apply the boron fit to all dopant types for now
-          Nb = 6e19;
-          Nc = 7e20;
-          richter_alpha = 0.43;
-          richter_gamma = 1.6;
-          richter_beta = 0.1;
-          richter_eta = 3;
-          richter_theta = 0.9;
-          
-          T0 = 300;
+      Nb = 6e19;
+      Nc = 7e20;
+      richter_alpha = 0.43;
+      richter_gamma = 1.6;
+      richter_beta = 0.1;
+      richter_eta = 3;
+      richter_theta = 0.9;
+      
+      T0 = 300;
+      switch self.thermal_modeling
+        case 'none'
+          average_PR_temp = self.T; % the ambient temperature
+        case 'approx'
           average_PR_temp = self.approxPRTemp();
-          Theta = average_PR_temp/T0;
-          
-          piezoresistance_factor = Theta^-richter_theta*(1 + Theta^-richter_beta*(dopant_concentration/Nb).^richter_alpha + Theta^-richter_eta*(dopant_concentration/Nc).^richter_gamma).^-1;
-          
-          % Alternatively, use an empirical fit to Tufte/Stelzer's n-type diffusion data.
-          % Doesn't include the temperature dependence of the piezoresistance_factor though
-        case {'arsenic'}
-          a = 0.2330;
-          b = 5.61e21;
-          piezoresistance_factor = log10((b./dopant_concentration).^a);
+        case 'exact'
+          average_PR_temp = self.averagePRTemp();
       end
+      Theta = average_PR_temp/T0;
+      
+      piezoresistance_factor = Theta^-richter_theta*(1 + Theta^-richter_beta*(dopant_concentration/Nb).^richter_alpha + Theta^-richter_eta*(dopant_concentration/Nc).^richter_gamma).^-1;
+      
+      % Harley model
+      % a = 0.2330;
+      % b = 5.61e21;
+      % piezoresistance_factor = log10((b./dopant_concentration).^a);
     end
     
     function max_factor = max_piezoresistance_factor(self)
@@ -756,8 +832,16 @@ classdef cantilever
     % Assumes that the transverse section is doubled in width (to reduce its resistance/avoid sharp corners)
     % Units: V/N
     function force_sensitivity = force_sensitivity(self)
-      
+
+      % Optimization: precompute these parameters
+      betaStar = self.beta();
+      Rs = self.sheet_resistance();
       wheatstone_bridge_sensitivity = self.v_bridge/4;
+      piMax = self.max_piezoresistance_factor();
+      gamma = self.gamma();
+      R = self.resistance();
+      l_pr = self.l_pr();
+      w_pr = self.w_pr();
       
       % Pick the correct transverse piezoresistive coefficient for the doping type
       switch self.doping_type
@@ -768,26 +852,24 @@ classdef cantilever
       end
       
       % Average length from the base to the centroid of the piezoresistor section
-      longitudinal_l_avg = self.l - self.l_pr()/2;
-      transverse_l_avg = self.l - self.l_pr();
+      longitudinal_l_avg = self.l - l_pr/2;
+      transverse_l_avg = self.l - l_pr;
       
       % Stress prefactor
-      stress_prefactor = 6*self.max_piezoresistance_factor()/(self.w*self.t^2)*self.beta()*self.gamma();
+      stress_prefactor = 6*piMax/(self.w*self.t^2)*betaStar*gamma;
       
       % Calculate resistor value for the longitudinal and transverse sections
       % Assume that the transverse width is 2x the overall cantilever width and is 2x the PR width
-      R_longitudinal = 2*self.l_pr()/self.w_pr() * self.sheet_resistance();
-      R_transverse = self.air_gap_width/2*self.w_pr() * self.sheet_resistance();
+      R_longitudinal = 2*Rs*l_pr/w_pr;
+      R_transverse = Rs*w_pr*self.air_gap_width/2;
       
       % Calculate deltaR values
       longitudinal_deltaR = stress_prefactor*longitudinal_l_avg*R_longitudinal;
       transverse_deltaR = stress_prefactor*transverse_factor*transverse_l_avg*R_transverse;
-      
-      deltaR_R = (longitudinal_deltaR + transverse_deltaR)/self.resistance();
+      deltaR_R = (longitudinal_deltaR + transverse_deltaR)/R;
+
       force_sensitivity = deltaR_R*wheatstone_bridge_sensitivity;
-      
-      % Kept just for reference
-      force_sensitivity_no_transverse_effect = 3*(self.l - self.l_pr()/2)*self.max_piezoresistance_factor()/(2*self.w*self.t^2)*self.beta()*self.gamma()*self.v_bridge;
+%       force_sensitivity_no_transverse_effect = 3*(self.l - l_pr/2)*piMax/(2*self.w*self.t^2)*betaStar*gamma*self.v_bridge;
     end
     
     % Calculate the input referred surface stress sensitivity
@@ -1122,27 +1204,16 @@ classdef cantilever
     % Calculate k(x) assuming that the cantilever is very close to the ambient temperature (self.T)
     % For high temperature deviations, use thermal_conductivity_profile
     function k_effective = k_x(self) %#ok<*MANU>
-      
-      % For operation around 300K with a known thickness, use a precalculated value for a substantial speed improvement
-      % --- If you're trying to fit to experimental data, comment this section out ---
-      switch self.t
-        case 300e-9
-          k_effective = 96.5;
-          return;
-        case 340e-9
-          k_effective = 98.9;
-          return;
-        case 1e-6
-          k_effective = 120.6;
-          return;
-        case 2e-6
-          k_effective = 128.8;
-          return;
+      switch self.thermal_modeling
+        case {'none', 'approx'}
+          % Model from Asheghi (1997)
+          t0 = 120e-9;
+          k_effective = self.k_si*self.t./(t0 + self.t);
+        case 'exact'
+          % Full method: calculate the effective cross-sectional thermal conductivity.
+          [x, z, k] = self.thermal_conductivity_profile(self.T);
+          k_effective = mean(k); % Assume uniformity z-grid spacing
       end
-      
-      % Full method: calculate the effective cross-sectional thermal conductivity.
-      [x, z, k] = self.thermal_conductivity_profile(self.T);
-      k_effective = mean(k); % Assume uniformity z-grid spacing
     end
     
     % Calculate k(x,z) considering temperature dependent phonon-boundary and -ionized impurity scattering.
@@ -1772,11 +1843,15 @@ classdef cantilever
     end
     
     % Calculate dopant strain induced bending
-    % Handles a single material with an arbitrary strain gradient by splitting it into two sub-sections0
+    % Handles a single material with an arbitrary strain gradient by splitting it into two sub-sections
     % Source: "Residual strain and resultant postrelease deflection ...", J Vac Sci Technol A, 1999
     function [x, C, theta, deflection] = calculateDopantBending(self)
-      % Measured from beam deflection of diffused cantilevers to be strain = delta*C, delta = 4.98 +/- 0.58 * 1e-24
-      delta = 4.98e-24;
+      % I measured a strain coefficient of delta = 1e-24*(4.98+/-0.58)
+      % while reports in the literature look to be more lik 4.5e-24.
+      % Because there may have been other strain gradients in my films,
+      % I think that the 4.5e-24 value is more accurate.
+      % See: "Effects of phosphorus on stress...", JMM, 1999.
+      delta = 4.5e-24;
       
       n_points = self.numXPoints;
       dx = self.l/(n_points - 1);
@@ -2511,13 +2586,13 @@ classdef cantilever
     % Secondary constraints (e.g. power dissipation, resonant frequency) are applied in optimization_constraints()
     function [lb ub] = optimization_bounds(self, parameter_constraints)
       min_l = 10e-6;
-      max_l = 2e-3;
+      max_l = 3e-3;
       
       min_w = 2e-6;
-      max_w = 20e-6;
+      max_w = 100e-6;
       
       min_t = 1e-6;
-      max_t = 10e-6;
+      max_t = 100e-6;
       
       min_l_pr_ratio = 0.001;
       max_l_pr_ratio = 0.999;
@@ -2802,10 +2877,9 @@ classdef cantilever
       end
       
       % Useful lines for debugging constraint failures (e.g. you made l_max too small for it to hit the desired f_0)
-      % C
-      % Ceq
-      % sprintf('Active Index: %d  -- Value: %g\n', find(C==max(C)), max(C))
-      % pause
+%       C
+%       Ceq
+%       sprintf('Active Index: %d  -- Value: %g\n', find(C==max(C)), max(C))
     end
     
     % The optimization isn't convex so isn't guaranteed to converge.

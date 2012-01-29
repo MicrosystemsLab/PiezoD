@@ -140,6 +140,12 @@ classdef cantilever_diffusion < cantilever
           x = x*1e-2; % cm -> m
       end
     end
+    
+    % Note: Fix this to include current crowding
+    function Nz = Nz(self)
+      [z, N_active, N_total] = self.doping_profile();
+      Nz = trapz(z, N_active*1e6); % doping: N/cm^3 -> N/m^3
+    end
 
     function plot_doping_profile(self)
       [x, active_doping, total_doping] = self.doping_profile();
@@ -155,6 +161,10 @@ classdef cantilever_diffusion < cantilever
     function x_j = junction_depth(self)
       [x, active_doping, total_doping] = self.doping_profile();
       x_j = x(find(active_doping == 1e15, 1));
+    end
+    
+    function alpha = alpha(self)
+      alpha = self.default_alpha; % use the alpha from the superclass
     end
     
     % ==================================
@@ -216,7 +226,7 @@ classdef cantilever_diffusion < cantilever
       
       % Generate the random values
       diffusion_time_random = diffusion_time_min + rand*(diffusion_time_max - diffusion_time_min);
-      diffusion_temp_random = diffusion_temp_min + rand*(diffusion_temp_max - diffusion_temp_max);
+      diffusion_temp_random = diffusion_temp_min + rand*(diffusion_temp_max - diffusion_temp_min);
       
       x0 = [diffusion_time_random, diffusion_temp_random];
     end

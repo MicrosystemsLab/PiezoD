@@ -63,6 +63,15 @@ classdef cantilever_epitaxy < cantilever
       total_doping = active_doping;
     end
     
+    function Nz = Nz(self)
+      [z, N_active, N_total] = self.doping_profile();
+      Nz = trapz(z, N_active*1e6); % doping: N/cm^3 -> N/m^3
+    end
+    
+    function alpha = alpha(self)
+      alpha = self.default_alpha; % use the alpha from the superclass
+    end    
+    
     % ========= Optimization  ==========
     function scaling = doping_optimization_scaling(self)
       concentration_scale = 1e-18;
