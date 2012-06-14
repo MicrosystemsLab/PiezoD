@@ -4,7 +4,7 @@
 %#ok<*PROP>
 
 
-classdef cantilever_piezoelectric
+classdef cantileverPiezoelectric
   
   properties
     % Constants

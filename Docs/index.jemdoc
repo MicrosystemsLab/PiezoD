@@ -7,10 +7,9 @@ Features include:
 
 - materials
  -- p-type and n-type single crystal silicon piezoresistive cantilevers
- -- epitaxial or surface diffusion based fabrication
+ -- epitaxial, diffused and ion implanted piezoresistors
  -- aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers
- -- *(coming soon)* lookup table based ion implantation fabrication
- -- *(coming soon)* polycrystalline silicon and thin metal film cantilevers
+ -- polycrystalline silicon and thin metal film cantilevers
 - performance modeling
  -- noise: 1/f, johnson, amplifier, thermomechanical
  -- mechanics: Bernoulli beam bending with accurate stiffness and resonant frequency for multilayer, segmented structures

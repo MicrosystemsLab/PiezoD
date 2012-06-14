@@ -26,6 +26,19 @@
 </div>
 <p>piezoD is under active development.</p>
 <h1>Revisions</h1>
+<h2>Version 0.6.0</h2>
+<ul>
+<li><p>Added the ion implanted cantilever class, which is based upon a lookup table approach. The table was tabulated from TSuprem simulations and covers a wide range of conditions for boron, phosphorus and arsenic doping. Details of the TSuprem simulation and lookup table generation are included in my thesis.</p>
+</li>
+</ul>
+<ul>
+<li><p>I also reintegrated the classes for modeling piezoelectric, polysilicon and metal strain gauge based cantilevers into the code.</p>
+</li>
+</ul>
+<ul>
+<li><p>The main cantilever class was getting a little bit out of hand, so I extracted several methods that are unlikely to be used (e.g. fitting effective convection coefficients from experimental data).</p>
+</li>
+</ul>
 <h2>Version 0.5.0</h2>
 <ul>
 <li><p>Rolled segmented cantilever (i.e. base stiffener, thermal actuator, or piezoelectric actuator) modeling code into cantilever.m</p>
@@ -170,7 +183,7 @@ user friendly and reduce barriers to usage.</p>
 </ul>
 <div id="footer">
 <div id="footer-text">
-Page generated 2011-01-16 22:37:47 PST, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2012-06-12 18:38:24 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

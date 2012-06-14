@@ -1,4 +1,4 @@
-classdef cantilever_poly
+classdef cantileverPoly
 
     % Note that w is the total cantilever width where the piezoresistor is.
     % If the piezoresistor has two legs, then w_pr_ratio can only have a

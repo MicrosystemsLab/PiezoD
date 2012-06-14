@@ -1,1 +1,1 @@
-jemdoc -c piezoD.conf -o html/ *.jemdoc
+/opt/jemdoc.py -c piezoD.conf -o html/ *.jemdoc

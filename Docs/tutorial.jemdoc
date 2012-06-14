@@ -37,13 +37,7 @@ dopant_concentration = 1e18;
 v_bridge = 2;
 ~~~
 
-We have defined the piezoresistor to extend 80\% of the cantilever beam length, and to be 50\% of the beam thickness (500 nm). We then define the piezoresistor to be n-type (phosphorus). This implicitly defines the cantilever to be oriented in the <100> orientation, where the piezoresistive coefficient is a maximum. The code automatically uses an elastic modulus of 130 GPa for this orientation.
-
-If we had chosen 'boron' instead, the cantilever would face the <110> direction (E = 169 GPa) and the piezoresistive coefficients would be modified accordingly as well.
-
-We're going to make an epitaxially doped piezoresistor, which will have a constant dopant concentration of 1e18 per cc in the piezoresistor.
-
-Finally, the code assumes that the piezoresistor is being measured with a Wheatstone bridge and we are applying a bias voltage of 2 V across the entire bridge (1 V across the piezoresistor).
+We're going to design a phosphorus doped epitaxial piezoresistor that will initially have a dopant concentration of 1e18/cc. We have defined the piezoresistor to extend 80\% of the cantilever beam length, and to be 50\% of the beam thickness (500 nm). We then define the piezoresistor to be n-type (phosphorus). This implicitly defines the cantilever to be oriented in the <100> orientation, where the piezoresistive coefficient is a maximum. The code automatically uses an elastic modulus of 130 GPa for this orientation. If we had chosen 'boron' instead, the cantilever would face the <110> direction (E = 169 GPa) and the piezoresistive coefficients would be modified accordingly as well. Finally, the code assumes that the piezoresistor is being measured with a Wheatstone bridge and we are applying a bias voltage of 2 V across the entire bridge (1 V across the piezoresistor).
 
 We just need to define one last parameter, which is the frequency range that we are measuring. This is used for calculating the force or displacement resolution of the cantilever.
 
@@ -59,12 +53,12 @@ This is enough to construct a cantilever, which we can do with this code.
 
 ~~~
 {}{}
-c_epitaxy = cantilever_epitaxy(freq_min, freq_max, ...
+c_epitaxy = cantileverEpitaxy(freq_min, freq_max, ...
     l, w, t, l_pr_ratio, v_bridge, doping_type, dopant_concentration, ...
     t_pr_ratio);
 ~~~
 
-We have created a cantilever_epitaxy object using the variables defined up until now. We can examine the object we just created by typing in the variable name.
+We have created a cantileverEpitaxy object using the variables defined up until now. We can examine the object we just created by typing in the variable name.
 
 ~~~
 {}{}
@@ -165,6 +159,6 @@ If you compare the force resolution before and after the optimization you should
 
 By default the code optimizes for force resolution. We're working on a simple interface for optimizing for displacement resolution, although just one line of code needs to be changed (search for problem.objective in cantilever.m).
 
-That wraps up the basic tutorial on optimizing an epitaxial cantilever. Read through sample_code.m and the comments in the code for additional tips.
+That wraps up the basic tutorial on optimizing an epitaxial cantilever. Read through sampleCode.m and the comments in the code for additional tips.
 
 If you have other questions, please [./contact.html contact] us and be sure to [./contributing.html contribute] to help make the project better and help future users.

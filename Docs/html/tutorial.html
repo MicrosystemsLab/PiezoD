@@ -51,10 +51,7 @@ dopant_concentration = 1e18;
 
 v_bridge = 2;
 </pre></div></div>
-<p>We have defined the piezoresistor to extend 80% of the cantilever beam length, and to be 50% of the beam thickness (500 nm). We then define the piezoresistor to be n-type (phosphorus). This implicitly defines the cantilever to be oriented in the &lt;100&gt; orientation, where the piezoresistive coefficient is a maximum. The code automatically uses an elastic modulus of 130 GPa for this orientation.</p>
-<p>If we had chosen 'boron&rsquo; instead, the cantilever would face the &lt;110&gt; direction (E = 169 GPa) and the piezoresistive coefficients would be modified accordingly as well.</p>
-<p>We're going to make an epitaxially doped piezoresistor, which will have a constant dopant concentration of 1e18 per cc in the piezoresistor.</p>
-<p>Finally, the code assumes that the piezoresistor is being measured with a Wheatstone bridge and we are applying a bias voltage of 2 V across the entire bridge (1 V across the piezoresistor).</p>
+<p>We're going to design a phosphorus doped epitaxial piezoresistor that will initially have a dopant concentration of 1e18/cc. We have defined the piezoresistor to extend 80% of the cantilever beam length, and to be 50% of the beam thickness (500 nm). We then define the piezoresistor to be n-type (phosphorus). This implicitly defines the cantilever to be oriented in the &lt;100&gt; orientation, where the piezoresistive coefficient is a maximum. The code automatically uses an elastic modulus of 130 GPa for this orientation. If we had chosen 'boron&rsquo; instead, the cantilever would face the &lt;110&gt; direction (E = 169 GPa) and the piezoresistive coefficients would be modified accordingly as well. Finally, the code assumes that the piezoresistor is being measured with a Wheatstone bridge and we are applying a bias voltage of 2 V across the entire bridge (1 V across the piezoresistor).</p>
 <p>We just need to define one last parameter, which is the frequency range that we are measuring. This is used for calculating the force or displacement resolution of the cantilever.</p>
 <div class="codeblock">
 <div class="blockcontent"><pre>
@@ -65,11 +62,11 @@ freq_max = 1000;
 <p>This is enough to construct a cantilever, which we can do with this code.</p>
 <div class="codeblock">
 <div class="blockcontent"><pre>
-c_epitaxy = cantilever_epitaxy(freq_min, freq_max, ...
+c_epitaxy = cantileverEpitaxy(freq_min, freq_max, ...
     l, w, t, l_pr_ratio, v_bridge, doping_type, dopant_concentration, ...
     t_pr_ratio);
 </pre></div></div>
-<p>We have created a cantilever_epitaxy object using the variables defined up until now. We can examine the object we just created by typing in the variable name.</p>
+<p>We have created a cantileverEpitaxy object using the variables defined up until now. We can examine the object we just created by typing in the variable name.</p>
 <div class="codeblock">
 <div class="blockcontent"><pre>
 c_epitaxy
@@ -144,11 +141,11 @@ c_epitaxy.print_performance()
 </pre></div></div>
 <p>If you compare the force resolution before and after the optimization you should see a significant improvement. When I ran this, it went from 125 pN to 2.5 pN.</p>
 <p>By default the code optimizes for force resolution. We're working on a simple interface for optimizing for displacement resolution, although just one line of code needs to be changed (search for problem.objective in cantilever.m).</p>
-<p>That wraps up the basic tutorial on optimizing an epitaxial cantilever. Read through sample_code.m and the comments in the code for additional tips.</p>
+<p>That wraps up the basic tutorial on optimizing an epitaxial cantilever. Read through sampleCode.m and the comments in the code for additional tips.</p>
 <p>If you have other questions, please <a href="./contact.html">contact</a> us and be sure to <a href="./contributing.html">contribute</a> to help make the project better and help future users.</p>
 <div id="footer">
 <div id="footer-text">
-Page generated 2011-01-16 22:37:47 PST, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2012-06-12 18:38:24 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

@@ -1,4 +1,5 @@
-classdef cantilever_diffusion < cantilever
+% Model a diffused cantilever (particularly phosphorus/POCl3 diffusion)
+classdef cantileverDiffusion < cantilever
   properties
     diffusion_time
     diffusion_temp
@@ -6,19 +7,20 @@ classdef cantilever_diffusion < cantilever
   
   methods
     % Call superclass constructor
-    function self = cantilever_diffusion(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type, ...
-        diffusion_time, diffusion_temp)
+    function self = cantileverDiffusion(freq_min, freq_max, l, w, t, ...
+			l_pr_ratio, v_bridge, doping_type, diffusion_time, diffusion_temp)
       
-      self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type);
+      self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, ...
+				v_bridge, doping_type);
       
       self.diffusion_time = diffusion_time;
       self.diffusion_temp = diffusion_temp;
     end
     
-    
     function print_performance(self)
-      print_performance@cantilever(self); % print the base stuff
-      fprintf('Diffusion time (mins), temp (C): %f %f \n', self.diffusion_time/60, self.diffusion_temp-273);
+      print_performance@cantilever(self); % print the base class stuff
+      fprintf('Diffusion time (mins), temp (C): %f %f \n', ...
+				self.diffusion_time/60, self.diffusion_temp-273);
       fprintf('Junction depth (nm): %f \n', self.junction_depth()*1e9);
       fprintf('=======================\n\n')
     end
@@ -45,10 +47,6 @@ classdef cantilever_diffusion < cantilever
       end
       fprintf(fid, '\n');
     end
-    
-    % ==================================
-    % ======== Doping Profile  =========
-    % ==================================
     
     % Calculate the diffusion profile for a constant surface source
     % diffusion using self.diffusion_time and self.diffusion_temp as
@@ -112,21 +110,29 @@ classdef cantilever_diffusion < cantilever
           Db = 2.3*exp(-1.95./(k_b_eV*self.diffusion_temp))*1e-5;
           Cb = 3*exp(-0.88./(k_b_eV*self.diffusion_temp))*1e23;
           
-          t = self.diffusion_time + time_offset*60; % Add 3 minutes diffusion time for the oxidation and purge steps after the diffusion
+					% Add some offset time to account for the oxidation/purge steps
+          t = self.diffusion_time + time_offset*60;
           
-          % Temperature dependent electrically active concentration (from Solmi and Nobili)
-          surface_concentration_total = 2.5e23*exp(-0.62./(k_b_eV*self.diffusion_temp));
-          surface_concentration_active = 1.1e22*exp(-0.37./(k_b_eV*self.diffusion_temp));
+          % Temperature dependent electrically active concentration
+					% Source: Solmi and Nobili papers (various)
+          surface_concentration_total = 2.5e23* ...
+						exp(-0.62./(k_b_eV*self.diffusion_temp));
+          surface_concentration_active = 1.1e22* ...
+						exp(-0.37./(k_b_eV*self.diffusion_temp));
           
           % Calculate the profile
           x0 = alpha*t;
           kappa = Cb/surface_concentration_total;
           
-          F1 = erfc((x+alpha*t)/(2*sqrt(Da*t))) + erfc((x-3*alpha*t)/(2*sqrt(Da*t)));
-          F2 = erfc((x+alpha*t)/(2*sqrt(Db*t))) + erfc((x-3*alpha*t)/(2*sqrt(Db*t)));
+          F1 = erfc((x+alpha*t)/(2*sqrt(Da*t))) + ...
+						erfc((x-3*alpha*t)/(2*sqrt(Da*t)));
+          F2 = erfc((x+alpha*t)/(2*sqrt(Db*t))) + ...
+						erfc((x-3*alpha*t)/(2*sqrt(Db*t)));
           
-          Ca = (1-kappa)/2*surface_concentration_total*exp(-alpha/(2*Da)*(x-alpha*t)).*F1;
-          Cb = kappa/2*surface_concentration_total*exp(-alpha/(2*Db)*(x-alpha*t)).*F2;
+          Ca = (1-kappa)/2*surface_concentration_total* ...
+						exp(-alpha/(2*Da)*(x-alpha*t)).*F1;
+          Cb = kappa/2*surface_concentration_total* ...
+						exp(-alpha/(2*Db)*(x-alpha*t)).*F2;
           
           C_total = Ca + Cb;
           C_total(find(C_total < 1e15)) = 1e15;
@@ -134,17 +140,20 @@ classdef cantilever_diffusion < cantilever
           total_doping = C_total;
           
           C_active = C_total;
-          C_active(C_active >= surface_concentration_active) = surface_concentration_active;
+          C_active(C_active >= surface_concentration_active) = ...
+						surface_concentration_active;
           active_doping = C_active;    
           
           x = x*1e-2; % cm -> m
       end
     end
     
-    % Note: Fix this to include current crowding
+    % Effective carrier density, N/m^2
     function Nz = Nz(self)
       [z, N_active, N_total] = self.doping_profile();
-      Nz = trapz(z, N_active*1e6); % doping: N/cm^3 -> N/m^3
+      [mu, sigma] = self.mobility(N_active, self.T);
+%       Nz_total = trapz(z, N_active*1e6) % doping: N/cm^3 -> N/m^3
+      Nz = 1e4*trapz(z*1e2, N_active.*mu)^2/trapz(z*1e2, N_active.*mu.^2);    
     end
 
     function plot_doping_profile(self)
@@ -225,8 +234,10 @@ classdef cantilever_diffusion < cantilever
       
       
       % Generate the random values
-      diffusion_time_random = diffusion_time_min + rand*(diffusion_time_max - diffusion_time_min);
-      diffusion_temp_random = diffusion_temp_min + rand*(diffusion_temp_max - diffusion_temp_min);
+      diffusion_time_random = diffusion_time_min + ...
+				rand*(diffusion_time_max - diffusion_time_min);
+      diffusion_temp_random = diffusion_temp_min + ...
+				rand*(diffusion_temp_max - diffusion_temp_min);
       
       x0 = [diffusion_time_random, diffusion_temp_random];
     end

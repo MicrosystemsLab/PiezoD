@@ -1,8 +1,11 @@
 # jemdoc: menu{MENU}{download.html}
 = piezoD - download
 
+piezoD is (and will always be) free and open source software. If you download and use it, we only ask that you cite the first paper that we wrote on the subject, entitled "[http://jap.aip.org/resource/1/japiau/v106/i6/p064310_s1 Design optimization of piezoresistive cantilevers for force sensing in air and water]". We have written several followup papers on the subject of piezoresistor design that you can find [http://microsystems.stanford.edu/wiki/Micro:Publications here] (e.g. "[http://apl.aip.org/resource/1/applab/v98/i22/p223103_s1 Self-heating in piezoresistive cantilevers]") that we would also encourage you to check out.
+
 piezoD is composed of several Matlab classes. You can download official releases from here.
 
+- [./v0.6.0.zip v0.6.0 - 06\/12\/12] - Added ion implantation modeling and optimization via a lookup table tabulated from TSuprem simulations. Also reintegrated the poly and piezoelectric classes to the release and cleaned up the code.
 - [./v0.5.0.zip v0.5.0 - 01\/16\/11] - Several major changes: 1) temperature dependent modeling of piezoresistor self-heating, 2) better mechanics modeling for segmented cantilevers, particularly resonant frequency via the Rayleigh-Ritz method, 3) a Simulink model to investigate time-domain response, 4) cleaned up the code.
 - [./v0.4.2.zip v0.4.2 - 07\/06\/10] - More big changes. Added optional code to simulate thermal or piezoelectric actuation at the base of the cantilever. Optional features now include actuation, tip mass, and the number of piezoresistors in the Wheatstone bridge. Also fixed some bugs from the last release.
 - [./v0.4.0.zip v0.4.0 - 06\/17\/10] - Big changes. Wrote a piezoelectric sensor class. Added thermal modeling to PR cantilevers and temperature constrained design. Lots of performance improvements.
@@ -16,8 +19,11 @@ The versions posted here will lag behind the actual code development. The most r
 
 piezoD requires Matlab R2008a or later and the optimization toolbox. Object oriented features were introduced in R2008a which are used. Installation is just a matter of placing the following files in your Matlab path.
 - cantilever.m
-- cantilever_diffusion.m
-- cantilever_epitaxy.m
-- cantilever_piezoelectric.m
+- cantileverDiffusion.m
+- cantileverEpitaxy.m
+- cantileverImplantation.m
+- cantileverPiezoelectric.m
+- cantileverPoly.m
+- lookupTable.mat
 
-You can check that it works by running *sample_code.m*. Please request any new features and report bugs [http://github.com/jcdoll/PiezoD/issues here].
+You can check that it works by running *sampleCode.m*. Please request any new features and report bugs [http://github.com/jcdoll/PiezoD/issues here].

@@ -1,12 +1,17 @@
-classdef cantilever_epitaxy < cantilever
+% Model an epitaxial cantilever (B, P, As well supported)
+% Assumes negligible dopant diffusion
+classdef cantileverEpitaxy < cantilever
   properties
     dopant_concentration
     t_pr_ratio
   end
   
   methods
-    function self = cantilever_epitaxy(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type, dopant_concentration, t_pr_ratio)
-      self = self@cantilever(freq_min, freq_max, l, w, t, l_pr_ratio, v_bridge, doping_type); % Call superclass constructor
+    function self = cantileverEpitaxy(freq_min, freq_max, l, w, t, ...
+			l_pr_ratio, v_bridge, doping_type, dopant_concentration, t_pr_ratio)
+			
+      self = self@cantilever(freq_min, freq_max, l, w, t, ...
+				l_pr_ratio, v_bridge, doping_type);
       self.dopant_concentration = dopant_concentration;
       self.t_pr_ratio = t_pr_ratio;
     end
@@ -45,10 +50,7 @@ classdef cantilever_epitaxy < cantilever
       fprintf(fid, '\n');
     end
     
-    
-    
-    % ======== Doping Profile  =========
-    % Return the electrically active dopant concentration profile through the cantilever thickness
+    % Return the electrically active dopant concentration profile
     % Units: cm^-3
     function [z, active_doping, total_doping] = doping_profile(self)
       n_points = self.numZPoints; % # of points of doping profile
@@ -63,6 +65,7 @@ classdef cantilever_epitaxy < cantilever
       total_doping = active_doping;
     end
     
+		% We assume a constant concentration so can just integrated to get N_z
     function Nz = Nz(self)
       [z, N_active, N_total] = self.doping_profile();
       Nz = trapz(z, N_active*1e6); % doping: N/cm^3 -> N/m^3
@@ -131,7 +134,8 @@ classdef cantilever_epitaxy < cantilever
       t_pr_ratio_max = ub(2);
       
       % Generate the random values
-      dopant_concentration_random = 10^(log10(n_min) + rand*(log10(n_max) - log10(n_min))); % logarithmically distributed
+      dopant_concentration_random = 10^(log10(n_min) + ...
+				rand*(log10(n_max) - log10(n_min))); % logarithmically distributed
       t_pr_ratio_random = t_pr_ratio_min + rand*(t_pr_ratio_max - t_pr_ratio_min);
       
       x0 = [dopant_concentration_random, t_pr_ratio_random];
