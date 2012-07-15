@@ -65,10 +65,17 @@ classdef cantileverEpitaxy < cantilever
       total_doping = active_doping;
     end
     
+    % Calculate sheet resistance
+    % Units: ohms
+    function Rs = sheet_resistance(self)
+      conductivity = self.conductivity(self.dopant_concentration); % ohm-cm
+      Rs = 1/(self.junction_depth()*1e2*conductivity); % t_j -> cm
+    end    
+    
 		% We assume a constant concentration so can just integrated to get N_z
+    % Units: carries/m^2
     function Nz = Nz(self)
-      [z, N_active, N_total] = self.doping_profile();
-      Nz = trapz(z, N_active*1e6); % doping: N/cm^3 -> N/m^3
+      Nz = self.junction_depth()*self.dopant_concentration*1e6;
     end
     
     function alpha = alpha(self)
@@ -77,7 +84,7 @@ classdef cantileverEpitaxy < cantilever
     
     % ========= Optimization  ==========
     function scaling = doping_optimization_scaling(self)
-      concentration_scale = 1e-18;
+      concentration_scale = 1e-19;
       t_pr_ratio_scale = 10;
       scaling = [concentration_scale t_pr_ratio_scale];
     end
@@ -96,14 +103,14 @@ classdef cantileverEpitaxy < cantilever
       
       min_dopant_concentration = 1e17;
       
-      % Use solid solubility at 800C
+      % Approximate solid solubilities at 1000C
       switch self.doping_type
         case 'boron'
-          max_dopant_concentration = 4.4e19;
+          max_dopant_concentration = 2e20;
         case 'phosphorus'
-          max_dopant_concentration = 2.9e20;
+          max_dopant_concentration = 4e20;
         case 'arsenic'
-          max_dopant_concentration = 2.3e19;
+          max_dopant_concentration = 8e20;
       end
       
       min_t_pr_ratio = 0.01;

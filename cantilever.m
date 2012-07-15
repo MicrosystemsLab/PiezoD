@@ -91,7 +91,7 @@ classdef cantilever
   
   % Constants - can be referred to with cantilever.variableName
   properties (Constant)
-    
+
     % Physical constants
     k_b = 1.38e-23; % J/K
     k_b_eV = 8.617343e-5; % eV/K
@@ -112,6 +112,12 @@ classdef cantilever
 		% Number of Monte Carlo iterations for calculating the tip
 		% deflection distribution
     numRandomStressIterations = 10;
+
+    % Number of optimization iterations to perform without
+    % convergence (to within 0.1%) before accepting
+    % the best answer so far
+    numOptimizationIterations = 20;
+    
     
     % The width between the two cantilever legs. Afffects the PR
 		% resistance and sensitivity, but only if l_pr is small
@@ -221,7 +227,7 @@ classdef cantilever
     goalSurfaceStress = 3;
     
     % Lookup table for calculating resonant frequency and quality factor in liquid
-    % Source: "Oscillations of cylinders..." by Brumley, Wilcox and Sader
+    % Source: "Oscillations of cylinders..." by Brumley, Wilcox and Sader (2010)
     % Values are stored as constants for calculation speed
     A_lookup = [0 1/50 1/20 1/10 1/5 1/2 1 2 5 10 20 50 1000]; % t/w ratio
     Beta_lookup = [-3 -2.5 -2 -1.5 -1 -.5 0 0.5 1 1.5 2 2.5 3 100]; % log(Re)
@@ -298,9 +304,10 @@ classdef cantilever
     doping_initial_conditions_random(self)
     doping_optimization_bounds(self, parameter_constraints)
     
-    % Treat Nz/alpha as abstract functions for handling ion implantation
+    % Abstract functions for handling ion implantation
     Nz(self)
     alpha(self)
+    sheet_resistance(self)
   end
   
   methods    
@@ -547,16 +554,6 @@ classdef cantilever
       dR = self.TCR*(self.approxPRTemp() - self.T);
     end
     
-    % Calculate sheet resistance. 
-		% Uses abstract method self.doping_profile()
-    % Units: ohms
-    function Rs = sheet_resistance(self)
-      [x, active_doping, total_doping] = self.doping_profile(); 
-			% Units: x -> m, doping -> N/cm^3
-      conductivity = self.conductivity(active_doping); % ohm-cm
-      Rs = 1/trapz(x*1e2, conductivity); % convert x to cm pre-integration
-    end
-    
     % Calculate conductivity for a given dopant concentration.
 		% Use vectors rather than looping for speed.
     % Units: C/V-sec-cm
@@ -570,8 +567,8 @@ classdef cantilever
     end
     
     % Calculate the temp dependent carrier density, mobility, conductivity
-    % Current version: "Electron and Hole Mobility ...", Reggiani et al.
-    % Previous version: "Modeling of Carrier Mobility ...", Masetti et al.
+    % Current: "Electron and Hole Mobility ...", Reggiani et al. (2002)
+    % Previously: "Modeling of Carrier Mobility ...", Masetti et al. (1983)
     function [mu, sigma] = mobility(self, dopantConc, T)
       Tnorm = T/300;
       Eg = 1.170-(4.730e-4*T.^2)./(T+636);
@@ -862,7 +859,6 @@ classdef cantilever
         case 'exact'
           TPR = self.averagePRTemp();
       end
-      TPR = self.approxPRTemp();
       resistance = resistance*(1 + TPR*self.TCR);
       switch self.amplifier
         case 'INA103'
@@ -880,8 +876,8 @@ classdef cantilever
           pause
       end
       
-      actuator_noise_integrated = self.rms_actuator_displacement_noise* ...
-				spring_constant*force_sensitivity; % V
+      actuator_noise_integrated = max(0, self.rms_actuator_displacement_noise* ...
+				spring_constant*force_sensitivity); % V
       johnson_integrated = sqrt(4*self.k_b*TPR*resistance* ...
 				(self.freq_max - self.freq_min));
       hooge_integrated = sqrt(self.alpha()*self.v_bridge^2* ...
@@ -1152,77 +1148,80 @@ classdef cantilever
     function [TMax TTip] = approxTempRise(self)
       h = self.lookupHeff();
       k_c = self.k_base();
+      l_pr = self.l_pr();
+      W = self.power_dissipation();
       
       % Model the system as current sources (PR or heater) and resistors
       [E_metal, rho_metal, k_metal, alpha_metal] = self.lookup_metal_properties();
       
       switch self.cantilever_type
         case 'none'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*k_c);
-          R_convection_pr = 1/(2*h*self.l_pr()*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*k_c);
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-          
-          R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + ...
-						1/(R_conduction_tip + R_convection_tip));
-          
-          TMax = self.power_dissipation()*R_total;
-          TTip = self.power_dissipation()*R_total/(R_conduction_tip + ...
-						R_convection_tip)*R_convection_tip;
+          switch self.fluid
+            case 'vacuum'
+              R_conduction_pr  = l_pr/(2*self.w*self.t*k_c) + self.R_base;
+              TMax = W*R_conduction_pr;
+              TTip = TMax;
+            otherwise
+              R_conduction_pr  = l_pr/(2*self.w*self.t*k_c) + self.R_base;
+              R_convection_pr = 1/(2*h*l_pr*(self.w + self.t));
+              R_conduction_tip  = (self.l - l_pr)/(2*self.w*self.t*k_c);
+              R_convection_tip = 1/(2*h*(self.l-l_pr)*(self.w + self.t));
+              R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + ...
+                1/(R_conduction_tip + R_convection_tip));
+              
+              TMax = W*R_total;
+              TTip = W*R_total/(R_conduction_tip + ...
+                R_convection_tip)*R_convection_tip;
+          end
         case 'step'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*k_c) + ...
-						self.l_a/(self.w_a*(self.t*k_c + self.t_a*k_metal));
-          R_convection_pr = 1/(2*h*(self.l_pr()+self.l_a)*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*k_c);
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-          
+          R_conduction_pr  = l_pr/(2*self.w*self.t*k_c) + ...
+						self.l_a/(self.w_a*(self.t*k_c + self.t_a*k_metal)) + ...
+            self.R_base;
+          R_convection_pr = 1/(2*h*(l_pr+self.l_a)*(self.w + self.t));
+          R_conduction_tip  = (self.l - l_pr)/(2*self.w*self.t*k_c);
+          R_convection_tip = 1/(2*h*(self.l-l_pr)*(self.w + self.t));
           R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + ...
 						1/(R_conduction_tip + R_convection_tip));
           
-          TMax = self.power_dissipation()*R_total;
-          TTip = self.power_dissipation()*R_total/(R_conduction_tip + ...
+          TMax = W*R_total;
+          TTip = W*R_total/(R_conduction_tip + ...
 						R_convection_tip)*R_convection_tip;
         case 'piezoelectric'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*k_c) + ...
+          R_conduction_pr  = l_pr/(2*self.w*self.t*k_c) + ...
 						self.l_a/(self.w_a*(k_c*self.t + self.k_aln*(self.t_a + ...
 						self.t_a_seed) + k_metal*(self.t_electrode_bottom + ...
-						self.t_electrode_top)));
-          R_convection_pr = 1/(2*h*self.l_pr()*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*k_c);
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
-          
+						self.t_electrode_top))) + self.R_base;
+          R_convection_pr = 1/(2*h*l_pr*(self.w + self.t));
+          R_conduction_tip  = (self.l - l_pr)/(2*self.w*self.t*k_c);
+          R_convection_tip = 1/(2*h*(self.l-l_pr)*(self.w + self.t));
           R_total = 1/(1/R_conduction_pr + 1/R_convection_pr + ...
 						1/(R_conduction_tip + R_convection_tip));
           
-          TMax = self.power_dissipation()*R_total;
-          TTip = self.power_dissipation()*R_total/(R_conduction_tip + ...
+          TMax = W*R_total;
+          TTip = W*R_total/(R_conduction_tip + ...
 						R_convection_tip)*R_convection_tip;
         case 'thermal'
-          R_conduction_pr  = self.l_pr()/(2*self.w*self.t*k_c) + ...
+          R_conduction_pr  = l_pr/(2*self.w*self.t*k_c) + ...
 						self.l_a/(self.w_a*(self.t*k_c + self.t_a*k_metal));
-          R_convection_pr = 1/(2*h*self.l_pr()*(self.w + self.t));
-          R_conduction_tip  = (self.l - self.l_pr())/(2*self.w*self.t*k_c);
-          R_convection_tip = 1/(2*h*(self.l-self.l_pr())*(self.w + self.t));
+          R_convection_pr = 1/(2*h*l_pr*(self.w + self.t));
+          R_conduction_tip  = (self.l - l_pr)/(2*self.w*self.t*k_c);
+          R_convection_tip = 1/(2*h*(self.l-l_pr)*(self.w + self.t));
           R_conduction_heater = self.l_a/(2*self.w_a*(self.t*k_c + ...
 						self.t_a*k_metal));
           R_convection_heater = 1/(2*h*self.l_a*(self.w_a + self.t_a));
-          
-          T_heater = self.heaterPower()/(1/R_convection_heater + ...
-						1/R_conduction_heater);
-          
           R_total = 1/(1/(R_conduction_pr + 1/(1/R_convection_heater + ...
 						1/R_conduction_heater)) + 1/R_convection_pr + ...
 						1/(R_conduction_tip + R_convection_tip));
           
+          T_heater = W/(1/R_convection_heater + ...
+						1/R_conduction_heater);
           TMaxDivider = 1/(1/R_convection_pr + 1/(R_conduction_tip + ...
 						R_convection_tip)) / (R_conduction_pr + 1/(1/R_convection_pr + ...
 						1/(R_conduction_tip + R_convection_tip)));
           TTipDivider = R_convection_tip/(R_convection_tip + R_conduction_tip);
-          
-          TMax = T_heater*TMaxDivider + self.power_dissipation()*R_total;
-          
+          TMax = T_heater*TMaxDivider + W*R_total;
           TTip = T_heater*TMaxDivider*TTipDivider + ...
-						self.power_dissipation()*R_total/(R_conduction_tip + ...
+						W*R_total/(R_conduction_tip + ...
 						R_convection_tip)*R_convection_tip;
       end
     end
@@ -1748,8 +1747,9 @@ classdef cantilever
           thermal_stress(x_temp > self.l_a, 2:6) = 0;
           
           % Calculate the piezoelectric stress
-          E_field = [0 0 0          0 self.v_actuator/self.t_a 0]';
-          d31 =     [0 0 self.d31() 0 self.d31()               0]';
+          % The seed electric field will vary depending on
+          E_field = [0 0 0 0 self.v_actuator/self.t_a 0]';
+          d31 =     [0 0 0 0 self.d31()               0]';
           
           piezoelectric_stress = ones(self.numXPoints,1)*E*d31*E_field';
           piezoelectric_stress(x_temp > self.l_a - self.l_a_gap, :) = 0;
@@ -2473,14 +2473,14 @@ classdef cantilever
       ss_resolution = self.surface_stress_resolution()*1e6;
     end
 
-    % Used by optimization to bring all state varibles to O(1)
+    % Used by optimization to bring all state varibles to O(10)
 		% If we didn't do that, we'd have O(1e-9) and O(1e20) variables
     function scaling = optimization_scaling(self)
-      l_scale = 1e6;
-      w_scale = 1e6;
-      t_scale = 1e9;
-      l_pr_ratio_scale = 10;
-      v_bridge_scale = 1;
+      l_scale = 1e5;
+      w_scale = 1e7;
+      t_scale = 1e8;
+      l_pr_ratio_scale = 1e2;
+      v_bridge_scale = 1e1;
       scaling = [l_scale, w_scale, t_scale, l_pr_ratio_scale, ...
 				v_bridge_scale, self.doping_optimization_scaling()];
       
@@ -2510,14 +2510,13 @@ classdef cantilever
 		% so that things like 'fluid' are maintained
     function self = cantilever_from_state(self, x0)
       scaling = self.optimization_scaling();
-      x0 = x0 ./ scaling;
+      x0 = x0./scaling;
       
       self.l = x0(1);
       self.w = x0(2);
       self.t = x0(3);
       self.l_pr_ratio = x0(4);
       self.v_bridge = x0(5);
-      
       self = self.doping_cantilever_from_state(x0);
       
       % Actuator specific code
@@ -2579,8 +2578,8 @@ classdef cantilever
       min_t = 1e-6;
       max_t = 100e-6;
       
-      min_l_pr_ratio = 0.001;
-      max_l_pr_ratio = 0.999;
+      min_l_pr_ratio = 0.01;
+      max_l_pr_ratio = 0.99;
       
       min_v_bridge = 0.1;
       max_v_bridge = 10;
@@ -2742,7 +2741,7 @@ classdef cantilever
       min_w_t_ratio = 2;
       min_l_w_ratio = 2;
       min_pr_l_w_ratio = 2;
-      min_pr_l = 1e-6;
+      min_pr_l = 2e-6;
       
       % Read out the constraints as key-value pairs
 			% , e.g. {{'omega_min_hz', 'min_k'}, {1000, 10}}
@@ -2759,12 +2758,9 @@ classdef cantilever
       % If a C(ii) > 0 then constraint ii is invalid
 			
 			% Force resolution must always be positive
+      % Use a linear function so that it's smooth/continuous
       resolution = c_new.force_resolution();
-      if resolution <= 0
-        C(1) = 1;
-      else
-        C(1) = -1;
-      end
+      C(1) = -resolution*1e18;
       
       % Resonant frequency
       if exist('omega_min_hz', 'var')
@@ -2843,7 +2839,7 @@ classdef cantilever
       pr_length_width_ratio = min_pr_l_w_ratio - c_new.l_pr()/c_new.w_pr();
       C = [C pr_length_width_ratio];
       
-      pr_length_constraint = min_pr_l - c_new.l_pr();
+      pr_length_constraint = (min_pr_l - c_new.l_pr())*1e6;
       C = [C pr_length_constraint];
       
       
@@ -2875,9 +2871,9 @@ classdef cantilever
       
       % Useful lines for debugging constraint failures
 			% (e.g. you made l_max too small for it to hit the desired f_0)
-% 			C
+      % C
 			% Ceq
-% 			sprintf('Active Index: %d  -- Value: %g\n', find(C==max(C)), max(C))
+      % sprintf('Active Index: %d  -- Value: %g\n', find(C==max(C)), max(C))
     end
     
     % The optimization isn't convex so isn't guaranteed to converge.
@@ -2887,7 +2883,7 @@ classdef cantilever
     function optimized_cantilever = optimize_performance(self, ...
 			parameter_constraints, nonlinear_constraints, goal)
       
-			percent_match = 0.001; % 0.1 percent match required between results
+			percent_match = 0.01; % 1 percent match required between results
       randomize_starting_conditions = 1;
       converged = 0;
       ii = 1;
@@ -2935,8 +2931,7 @@ classdef cantilever
           end
         end
         
-        % After 10 tries, we'll just use the best result we came across
-        if ii > 10
+        if ii > cantilever.numOptimizationIterations
           [temp_resolution, sortIndex] = sort(resolution);
           optimized_cantilever = c{sortIndex(1)};
           converged = 1;
@@ -2985,21 +2980,33 @@ classdef cantilever
       [lb ub] = self.optimization_bounds(parameter_constraints);
       problem.lb = scaling.*lb;
       problem.ub = scaling.*ub;
+%       problem.x0
       
-      problem.options.TolFun = 1e-12;
-      problem.options.TolCon = 1e-12;
-      problem.options.TolX = 1e-12;
+      problem.options.TolFun = 1e-9;
+      problem.options.TolCon = 1e-9;
+      problem.options.TolX = 1e-9;
       
       problem.options.MaxFunEvals = 2000;
       problem.options.MaxIter = 2000;
-      problem.options.Display = 'iter';
+      problem.options.Display = 'iter-detailed'; % iter, final, none, off
       problem.options.UseParallel = 'always'; % For multicore processors
+      problem.options.TypicalX = ones(1, length(scaling));
+      problem.options.InitBarrierParam = 10;
+
       
-      problem.options.Algorithm = 'Interior-point';
+      % interior-point does not do well if the design is already
+      % close to the optimal state (i.e. warm start). sqp is
+      % supposed to do better in this condition. try experimenting
+      % with both, particular for implanted devices.
+      problem.options.Algorithm = 'sqp'; % sqp, interior-point
       problem.solver = 'fmincon';
       
       problem.nonlcon = @(x) self.optimization_constraints(x, ...
 				nonlinear_constraints);
+      
+      % These errors come up occasionally for ion implanted devices
+      warning off MATLAB:singularMatrix
+      warning off MATLAB:nearlySingularMatrix
       
       [x, tmp, exitflag] = fmincon(problem);
       optimized_cantilever = self.cantilever_from_state(x);

@@ -148,6 +148,15 @@ classdef cantileverDiffusion < cantilever
       end
     end
     
+    % Calculate sheet resistance. 
+    % Units: ohms
+    function Rs = sheet_resistance(self)
+      [x, active_doping, total_doping] = self.doping_profile(); 
+			% Units: x -> m, doping -> N/cm^3
+      conductivity = self.conductivity(active_doping); % ohm-cm
+      Rs = 1/trapz(x*1e2, conductivity); % convert x to cm pre-integration
+    end
+    
     % Effective carrier density, N/m^2
     function Nz = Nz(self)
       [z, N_active, N_total] = self.doping_profile();

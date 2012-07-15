@@ -1,7 +1,20 @@
 % Model an ion implanted cantilever using lookup tables from TSuprem
-% B, P and As are supported with both inert and oxidizing anneal environments
-% The 'oxide' condition corresponds to 1500A of oxide grown before a longer
-% inert anneal
+% B, P and As are supported with either inert or oxidizing anneal
+% environments.
+%
+% For all conditions, a 250A protection oxide layer is grown
+% before the ion implantation.
+% 
+% After the implantation step...
+% 'oxide' -> strip protection oxide, regrow 1500A oxide, inert anneal
+% 'inert' -> leave protection oxide, inert anneal, strip oxide
+%
+% Lookup tables are linearly interpolated. Splines can result
+% in negative values (e.g. sheet resistance). Gradient/Hessian
+% discontinuities don't seem to pose a problem for optimization.
+%
+% The range of the simulation conditions (noted below) is equal to
+% the limits of the highest quality data in TSuprem
 classdef cantileverImplantation < cantilever
   properties
     implantation_energy; % 20 - 80 keV
@@ -202,7 +215,7 @@ classdef cantileverImplantation < cantilever
           D0 = 3.85; %cm2/s
           Ea = 3.66; %eV
       end
-      diffusivity = D0*exp(-1*Ea/self.k_b_eV/self.annealing_temp);
+      diffusivity = D0*exp(-Ea/self.k_b_eV/self.annealing_temp);
       diffusion_length = (diffusivity*self.annealing_time)^0.5; %cm
     end
     
@@ -213,10 +226,10 @@ classdef cantileverImplantation < cantilever
     
     % ========= Optimization  ==========
     function scaling = doping_optimization_scaling(self)
-      annealing_time_scale = 1e-3;
-      annealing_temp_scale = 1e-3;
-      implantation_energy_scale = 1;
-      implantation_dose_scale = 1e-14;
+      annealing_time_scale = 1e-2;
+      annealing_temp_scale = 1e-2;
+      implantation_energy_scale = 1e0;
+      implantation_dose_scale = 1e-13;
       scaling = [annealing_time_scale, annealing_temp_scale, ...
         implantation_energy_scale, implantation_dose_scale];
     end
