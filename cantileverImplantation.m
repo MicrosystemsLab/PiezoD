@@ -105,7 +105,7 @@ classdef cantileverImplantation < cantilever
     
     % Lookup the concentration profile from the lookup table
     function [x, active_doping, total_doping] = doping_profile(self)
-      x = self.lookupTableData.z; % 10nm spacing from 0 to 5um
+      x = self.lookupTableData.z*1e-6; % 10nm spacing from 0 to 5um
 
       n = interpn(x, self.lookupTableData.ImplantDopants, ...
 				self.lookupTableData.ImplantDoses, ...

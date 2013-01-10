@@ -78,3 +78,12 @@ exampleCantilever.fluid = 'water';
 exampleCantilever.number_of_piezoresistors = 4;
 exampleCantilever.print_performance();
 exampleCantilever.plotTempProfile();
+
+% Plot the ion implanted dopant concentration profile
+[x, active_doping, total_doping] = c_exampleCantilever.doping_profile();
+figure
+plot(x, active_doping);
+set(gca, 'yscale', 'log');
+xlabel('Depth (um)');
+ylabel('Concentration (per cc)');
+

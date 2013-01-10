@@ -5,6 +5,22 @@ piezoD is under active development.
 
 = Revisions
 
+== Version 0.7.1
+
+- This was a minor release that fixed two non-critical issues.
+
+- A few observant users notified me that the helper scripts used to generate the ion implantation lookup tables were not being included in the official releases. This was inadvertant and they're included now.
+
+- Another user came across a minor units bug in cantileverImplantation.m that affected looking up the dopant concentration profile. This only had an impact on plotting concentration profiles - the raw profile data is not used for any calculations in the codebase.
+
+== Version 0.7.0
+
+- Switched from using the interior point method to SQP for optimization. SQP works much, much better with optimizing ion implanted devices. It also has much better warm start behavior, i.e. it handles starting from an already good design better than the interior point method. Warm start behavior is a particularly large issue for ion implanted devices. With epi/diffusion, if you overshoot the optimal piezoresistor thickness or diffusion temperature then the sensitivity decreases but remains positive. With ion implantation, if you overshoot the optimal energy or anneal conditions then you can get a negative sensitivity factor pretty easily. So for designing ion implanted devices near their ultimate thickness limit (e.g. 300 nm for boron doping), the fact that the interior point method jumps quite far from the initial design leads to serious optimization problems. SQP handles this usage case much better and seems to converge more often as well.
+
+- Sheet resistance is tabulated in the ion implantation tables, but the code wasn't using it; instead it was recomputing it from the interpolated dopant profile. Fixing it brings faster speed and more accurate results. The sheet resistance method is now abstract and implemented in subclasses.
+
+- Several small bug fixes and speed improvements throughout the code.
+
 == Version 0.6.0
 
 - Added the ion implanted cantilever class, which is based upon a lookup table approach. The table was tabulated from TSuprem simulations and covers a wide range of conditions for boron, phosphorus and arsenic doping. Details of the TSuprem simulation and lookup table generation are included in my thesis.

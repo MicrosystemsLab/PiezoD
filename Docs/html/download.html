@@ -24,26 +24,31 @@
 <div id="toptitle">
 <h1>piezoD - download</h1>
 </div>
-<p>piezoD is (and will always be) free and open source software. If you download and use it, we only ask that you cite the first paper that we wrote on the subject, entitled &ldquo;<a href="http://jap.aip.org/resource/1/japiau/v106/i6/p064310_s1">Design optimization of piezoresistive cantilevers for force sensing in air and water</a>&rdquo;. We have written several followup papers on the subject of piezoresistor design that you can find <a href="http://microsystems.stanford.edu/wiki/Micro:Publications">here</a> (e.g. &ldquo;<a href="http://apl.aip.org/resource/1/applab/v98/i22/p223103_s1">Self-heating in piezoresistive cantilevers</a>&rdquo;) that we would also encourage you to check out.</p>
+<p>piezoD is (and will always be) free and open source software. If you download and use it, we only ask that you cite the first paper that we wrote on the subject, entitled &ldquo;<a href="http://jap.aip.org/resource/1/japiau/v106/i6/p064310_s1">Design optimization of piezoresistive cantilevers for force sensing in air and water</a>&rdquo;.</p>
+<p>We have written several followup papers on piezoresistor design and fabrication (e.g. <a href="http://microsystems.stanford.edu/microwiki_upload/a/a3/Doll_2011_APL.pdf">1</a>, <a href="http://microsystems.stanford.edu/microwiki_upload/8/80/JMM-2012.pdf">2</a> and <a href="http://microsystems.stanford.edu/microwiki_upload/5/5f/Nanoletters-2012.pdf">3</a>). You can find additional papers that we've written <a href="http://microsystems.stanford.edu/wiki/Micro:Publications">here</a>. For more details please also see <a href="http://purl.stanford.edu/gh804dp2388">Advances in high bandwidth nanomechanical force sensors with integrated actuation</a>.</p>
 <p>piezoD is composed of several Matlab classes. You can download official releases from here.</p>
 <ul>
-<li><p><a href="./v0.6.0.zip">v0.6.0 - 06/12/12</a> - Added ion implantation modeling and optimization via a lookup table tabulated from TSuprem simulations. Also reintegrated the poly and piezoelectric classes to the release and cleaned up the code.</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.7.1.zip">v0.7.1 - 01/09/13</a> - 1) Added the helper scripts for ion implantation table generation, which were accidentally not included in v0.6.0 and 2) Fixed a minor units bug in cantileverImplantation.m that affected plotting the resulting dopant concentration profile.</p>
 </li>
-<li><p><a href="./v0.5.0.zip">v0.5.0 - 01/16/11</a> - Several major changes: 1) temperature dependent modeling of piezoresistor self-heating, 2) better mechanics modeling for segmented cantilevers, particularly resonant frequency via the Rayleigh-Ritz method, 3) a Simulink model to investigate time-domain response, 4) cleaned up the code.</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.7.0.zip">v0.7.0 - 07/15/12</a> - Several minor changes: 1) Switched from using the interior point method to SQP for optimization. 2) Fixed ion implantation sheet resistance calculations. 3) Several small bug fixes and speed improvements throughout the code.</p>
 </li>
-<li><p><a href="./v0.4.2.zip">v0.4.2 - 07/06/10</a> - More big changes. Added optional code to simulate thermal or piezoelectric actuation at the base of the cantilever. Optional features now include actuation, tip mass, and the number of piezoresistors in the Wheatstone bridge. Also fixed some bugs from the last release.</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.6.0.zip">v0.6.0 - 06/12/12</a> - Added ion implantation modeling and optimization via a lookup table tabulated from TSuprem simulations. Also reintegrated the poly and piezoelectric classes to the release and cleaned up the code.</p>
 </li>
-<li><p><a href="./v0.4.0.zip">v0.4.0 - 06/17/10</a> - Big changes. Wrote a piezoelectric sensor class. Added thermal modeling to PR cantilevers and temperature constrained design. Lots of performance improvements.</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.5.0.zip">v0.5.0 - 01/16/11</a> - Several major changes: 1) temperature dependent modeling of piezoresistor self-heating, 2) better mechanics modeling for segmented cantilevers, particularly resonant frequency via the Rayleigh-Ritz method, 3) a Simulink model to investigate time-domain response, 4) cleaned up the code.</p>
 </li>
-<li><p><a href="./v0.3.1.zip">v0.3.1 - 03/30/10</a> - Added amplifier current noise, changed some default optimization constraints and the default gamma value. Added a parameter for the number of silicon resistors in the bridge.</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.4.2.zip">v0.4.2 - 07/06/10</a> - More big changes. Added optional code to simulate thermal or piezoelectric actuation at the base of the cantilever. Optional features now include actuation, tip mass, and the number of piezoresistors in the Wheatstone bridge. Also fixed some bugs from the last release.</p>
 </li>
-<li><p><a href="./v0.3.0.zip">v0.3.0 - 09/13/09</a> - Rewrote the method for passing in nonlinear constraints to the optimizer. It is much easier to optimize for a spring constant value or range now. Also changing the optimization goal from force to displacement can be specified more easily.</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.4.0.zip">v0.4.0 - 06/17/10</a> - Big changes. Wrote a piezoelectric sensor class. Added thermal modeling to PR cantilevers and temperature constrained design. Lots of performance improvements.</p>
 </li>
-<li><p><a href="./v0.2.1.zip">v0.2.1 - 07/24/09</a> - Fixed several bugs in the diffusion piezoresistor code and typos in sample_code.m</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.3.1.zip">v0.3.1 - 03/30/10</a> - Added amplifier current noise, changed some default optimization constraints and the default gamma value. Added a parameter for the number of silicon resistors in the bridge.</p>
 </li>
-<li><p><a href="./v0.2.0.tar.gz">v0.2.0 - 04/28/09</a> - Rewrote constraint handling, other important things</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.3.0.zip">v0.3.0 - 09/13/09</a> - Rewrote the method for passing in nonlinear constraints to the optimizer. It is much easier to optimize for a spring constant value or range now. Also changing the optimization goal from force to displacement can be specified more easily.</p>
 </li>
-<li><p><a href="./v0.1.0.tar.gz">v0.1.0 - 03/01/09</a> - Initial release</p>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.2.1.zip">v0.2.1 - 07/24/09</a> - Fixed several bugs in the diffusion piezoresistor code and typos in sample_code.m</p>
+</li>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.2.0.tar.gz">v0.2.0 - 04/28/09</a> - Rewrote constraint handling, other important things</p>
+</li>
+<li><p><a href="/cgi-bin/piezod/download.php?file=v0.1.0.tar.gz">v0.1.0 - 03/01/09</a> - Initial release</p>
 </li>
 </ul>
 <p>The versions posted here will lag behind the actual code development. The most recent code and detailed changes can be found at the <a href="http://github.com/jcdoll/PiezoD/commits/master/">github</a> page.</p>
@@ -67,7 +72,7 @@
 <p>You can check that it works by running <b>sampleCode.m</b>. Please request any new features and report bugs <a href="http://github.com/jcdoll/PiezoD/issues">here</a>.</p>
 <div id="footer">
 <div id="footer-text">
-Page generated 2012-06-12 18:38:24 PDT, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
+Page generated 2013-01-09 22:26:12 PST, by <a href="http://jemdoc.jaboc.net/">jemdoc</a>.
 </div>
 </div>
 </td>

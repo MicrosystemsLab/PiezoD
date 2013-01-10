@@ -1,7 +1,7 @@
 # jemdoc: menu{MENU}{index.html}
 = piezoD - piezoresistive and piezoelectric cantilever design optimization
 
-piezoD is a tool for modeling the performance and optimizing the design of piezoresistive and piezoelectric microcantilevers. It is written in object oriented Matlab, and is designed to make it fast and easy to design high performance cantilevers.
+piezoD is a tool for modeling the performance and optimizing the design of piezoresistive and piezoelectric sensors and actuators. It is written in object oriented Matlab, and is designed to make it fast and easy to design high performance microdevices. While originally developed for the design of cantilever beams, the code is modular and can be applied to a variety of problems.
 
 Features include: 
 
@@ -11,7 +11,7 @@ Features include:
  -- aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers
  -- polycrystalline silicon and thin metal film cantilevers
 - performance modeling
- -- noise: 1/f, johnson, amplifier, thermomechanical
+ -- noise: 1/f (Hooge), Johnson, amplifier, thermomechanical
  -- mechanics: Bernoulli beam bending with accurate stiffness and resonant frequency for multilayer, segmented structures
  -- concentration and temperature dependent effects: thermal conductivity, carrier density and mobility, piezoresistance factor
  -- fluid damping: resonant frequency and quality factor
@@ -21,11 +21,11 @@ Features include:
  -- general nonlinear constraints: power dissipation, temperature, resonant frequency, resistance, spring constant, etc
 - optimization targets
  -- integrated noise (force, displacement, surface stress)
- -- noise power spectral density (force, displacement, surface stress)
+ -- noise power spectral density (force, displacement, surface stress, acceleration, etc)
 
 = license
 
-Copyright\C 2009-2010 Joey Doll and Stanford Microsystems Lab
+Copyright\C 2009-2013 Joey Doll and Stanford Microsystems Lab
 
 piezoD is free software; you can redistribute it and/or modify it under the terms of the [http://www.gnu.org/licenses/gpl-3.0.html GNU General Public License] as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version.
 
