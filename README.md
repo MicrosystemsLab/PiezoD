@@ -1,33 +1,55 @@
-# Introduction
-PiezoD is a set of Matlab classes that implement analytical models for piezoresistive and piezoelectric sensor cantilever performance. Several types of piezoresistive cantilevers are supported: 1) single crystal silicon doped via diffusion, epitaxy or ion implantation, 2) polycrystalline silicon and metals, and 3) piezoelectric cantilevers.
+## Introduction
+piezoD is a tool for modeling the performance and optimizing the design of piezoresistive and piezoelectric sensors and actuators. It is written in object oriented Matlab, and is designed to make it fast and easy to design high performance microdevices. While originally developed for the design of cantilever beams, the code is modular and can be applied to a variety of problems.
 
-# Overview of Analytical Models
-There are four basic parts to the analytical models: 1) mechanics, 2) electrical, 3) thermal. 
 
-For each dopant type, the elastic modulus is calculated assuming that the piezoresistors are oriented along the optimal longitudinal axis (<110> for p-type, <100> for n-type). The piezoresistance factor is calculated as a function of dopant concentration using the model presented by Richter et al in 2008.
+## Features
 
-There are two models for the cantilever thermal conductivity. The first (simpler) is to calculate the temperature-independent thermal conductivity. If cantilever self-heating is small, then this is a good approximation. If the self-heating is substantial (e.g. temperature rises of >200C), then a more complicated k(T) model can be used.
+### Materials
+- p-type and n-type single crystal silicon piezoresistive cantilevers
+- epitaxial, diffused and ion implanted piezoresistors
+- aluminum nitride (AlN) and lead zirconate titanate (PZT) piezoelectric cantilevers
+- polycrystalline silicon and thin metal film cantilevers
 
-# Circuit Assumptions
-We assume that you're using a 1/4-active Wheatstone bridge and measuring the signal using an instrumentation amplifier. The noise characteristics of the INA103 and the AD8221 are currently included in the code and can be chosen by setting a flag.
+### Model components
+- noise: 1/f (Hooge), Johnson, amplifier, thermomechanical
+- mechanics: Bernoulli beam bending with accurate stiffness and resonant frequency for multilayer, segmented structures
+- concentration and temperature dependent effects: thermal conductivity, carrier density and mobility, piezoresistance factor
+- fluid damping: resonant frequency and quality factor
+- temperature profile: finite difference, lumped, and linearized circuit models for self-heating
 
-# Optimization
-Optimization is performed using fmincon, a Matlab function that is part of the Optimization Toolbox. It implements an l-bfgs-b optimizer that handles nonlinear constraints and uses finite differences to approximate the Hessian (matrix of second derivatives used in the optimization). The code supplies the model functions to the optimizer, allowing the optimization target (e.g. force resolution) to be calculated and its derivatives with respect to each of the active design parameters to be calculated. The design paramters vary by about 29 orders of magnitude in size (thickness ~ 100nm to dopant concentration ~ 1e20/cc), so the parameters are scaled to O(1) each iteration. There are several possible optimization goals that can be set by a flag - integrated force resolution, integrated displacement resolution, and force noise at a particular frequency (i.e. resonant sensing).
+### Constraints
+- simple bounds: all design parameters, e.g. cantilever length, bias voltage
+- general nonlinear constraints: power dissipation, temperature, resonant frequency, resistance, spring constant, etc
 
-# Usage
-Examples are provided in sampleCode.m.
+### Optimization goal functions
+* integrated noise (force, displacement, surface stress)
+* noise power spectral density (force, displacement, surface stress, acceleration, etc)
 
-# Code Structure and Extending the Code
-Cantilever is the abstract base class that implements most of the details. In order to extend the code (i.e. alternative doping methods), you need to extend cantilever.m and implement these methods:
-  doping_profile
-  optimization_scaling
-  cantilever_from_state
-  optimize_performance
-  optimization_constraints
 
-You probably also would want to override
-  print_performance
-  print_performance_for_excel
-  optimization_constraints
+## Documentation
+The main PiezoD website is written in jemdoc (see PiezoD/Docs/) and can be found here: [microsystems.stanford.edu/piezod](http://microsystems.stanford.edu/piezod).
 
-For an example of how to do this, take a look at cantileverDiffusion.m and cantileverEpitaxy.m.
+Model details and example usage are provided there.
+
+
+
+## Requirements
+PiezoD is currently implemented in object oriented Matlab and requires Matlab R2008a or later and the optimization toolbox.
+
+Python and Go implementations are currently in the works as both a coding exercise and to provide a complete OSS stack.
+
+
+## Attribution
+
+If you use PiezoD in your research, we only ask that you cite the first paper that we wrote on the subject:
+
+Joseph C. Doll, Sung-Jin Park and Beth L. Pruitt  
+Design optimization of piezoresistive cantilevers for force sensing in air and water  
+Journal of Applied Physics 106.6 (2009): 064310-064310.
+
+
+## License
+
+piezoD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version.
+
+piezoD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
