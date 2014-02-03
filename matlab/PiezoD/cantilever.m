@@ -405,7 +405,7 @@ classdef cantilever
             fprintf('Operating fluid: %s \n', self.fluid);
             fprintf('Cantilever L/W/T: %f %f %f \n', ...
                 self.l*1e6, self.w*1e6, self.t*1e6)
-            fprintf('PR L/W: %f %f %f \n', self.l_pr()*1e6, self.w_pr()*1e6)
+            fprintf('PR L/W: %f %f \n', self.l_pr()*1e6, self.w_pr()*1e6)
             fprintf('PR Length Ratio: %g \n', self.l_pr_ratio)
             fprintf('\n')
             fprintf('Force resolution (N): %g \n', self.force_resolution())
@@ -656,7 +656,7 @@ classdef cantilever
                 T_z_x = ones(self.numZPoints, 1)*T_x';
             end
             
-            [mu_z_x, sigma_z_x] = self.mobility_temp_dependent(n_z_x, T_z_x + self.T);
+            [mu_z_x, sigma_z_x] = self.mobility(n_z_x, T_z_x + self.T);
             Rsheet_x = 1./trapz(z*1e2, sigma_z_x); % Convert z from m to cm
         end
         
@@ -1621,6 +1621,7 @@ classdef cantilever
                 T_matrix = ones(self.numZPoints, 1)*T';
             end
             
+            % TODO: Refactor to remove all of those unnecessary function calls
             k = k_D_layer_HT(T_matrix, self.t, n_matrix, dM, dR);
         end
         
