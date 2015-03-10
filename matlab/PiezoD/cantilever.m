@@ -475,7 +475,7 @@ classdef cantilever
                         1e6*self.l_a, 1e6*self.w_a, 1e6*self.t_a)
                     fprintf('Neutral axis (um): %f \n', 1e6*self.actuatorNeutralAxis())
                     fprintf('Actuator Voltage (): %f \n', self.v_actuator)
-                    fprintf('Tip Deflection (nm): %f \n', 1e9*self.tipDeflectipon())
+                    fprintf('Tip Deflection (nm): %f \n', 1e9*self.tipDeflection())
             end
             fprintf('=======================\n')
         end
