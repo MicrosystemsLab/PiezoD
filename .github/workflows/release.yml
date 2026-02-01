@@ -22,12 +22,12 @@ jobs:
         run: sed -i 's/^version = .*/version = "${{ inputs.version }}"/' pyproject.toml
         working-directory: python
 
-      - name: Commit version bump
+      - name: Commit version bump (if changed)
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add python/pyproject.toml
-          git commit -m "Bump version to ${{ inputs.version }}"
+          git diff --staged --quiet || git commit -m "Bump version to ${{ inputs.version }}"
           git push
 
       - name: Create GitHub Release

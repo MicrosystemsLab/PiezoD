@@ -37,10 +37,16 @@ docker compose run --rm flooxs input.tcl
 
 Input/output files go in `simulations/` which is mounted into the container.
 
-Interactive shell (for debugging):
+Interactive FLOOXS prompt:
 
 ```bash
-docker compose run --rm flooxs /bin/bash
+docker compose run --rm flooxs
+```
+
+Interactive bash shell (for debugging):
+
+```bash
+docker compose run --rm --entrypoint /bin/bash flooxs
 ```
 
 ## Workflow
