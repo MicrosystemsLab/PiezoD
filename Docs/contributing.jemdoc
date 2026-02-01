@@ -1,6 +1,0 @@
-# jemdoc: menu{MENU}{contributing.html}
-= piezoD - contributing
-
-piezoD uses git for version control. The repository is hosted on GitHub and can be accessed [http://github.com/jcdoll/PiezoD here].
-
-Contributions are very welcome. Please report any issues or requests on GitHub. This documentation is also hosted in the GitHub repository, and you are welcome to help in improving it.

@@ -40,7 +40,11 @@ Future development will focus on the Python version.
 
 ## Documentation
 
-Model details and example usage are available at [microsystems.stanford.edu/piezod](http://microsystems.stanford.edu/piezod).
+- [Tutorial](docs/tutorial.md) - Step-by-step MATLAB guide
+
+## Contributing
+
+Contributions are welcome. Please report issues and feature requests on [GitHub Issues](https://github.com/MicrosystemsLab/PiezoD/issues).
 
 ## Attribution
 
