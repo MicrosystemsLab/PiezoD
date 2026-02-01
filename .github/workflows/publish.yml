@@ -1,8 +1,12 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to publish (e.g., v0.2.0)'
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -12,10 +16,26 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+
       - uses: astral-sh/setup-uv@v4
+
+      - name: Verify version matches pyproject.toml
+        run: |
+          TOML_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          INPUT_VERSION="${{ inputs.version }}"
+          INPUT_VERSION="${INPUT_VERSION#v}"
+          if [ "$TOML_VERSION" != "$INPUT_VERSION" ]; then
+            echo "Error: Input version ($INPUT_VERSION) doesn't match pyproject.toml ($TOML_VERSION)"
+            exit 1
+          fi
+        working-directory: python
+
       - name: Build
         run: uv build
         working-directory: python
+
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

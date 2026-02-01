@@ -18,13 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify version matches pyproject.toml
+      - name: Bump version in pyproject.toml
+        run: sed -i 's/^version = .*/version = "${{ inputs.version }}"/' pyproject.toml
+        working-directory: python
+
+      - name: Commit version bump
         run: |
-          TOML_VERSION=$(grep '^version = ' python/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          if [ "$TOML_VERSION" != "${{ inputs.version }}" ]; then
-            echo "Error: Input version (${{ inputs.version }}) doesn't match pyproject.toml ($TOML_VERSION)"
-            exit 1
-          fi
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add python/pyproject.toml
+          git commit -m "Bump version to ${{ inputs.version }}"
+          git push
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
