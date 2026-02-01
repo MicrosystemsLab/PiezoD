@@ -1,1 +1,0 @@
-class CantileverDiffusion(Cantilever):

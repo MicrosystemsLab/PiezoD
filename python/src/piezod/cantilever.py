@@ -326,78 +326,79 @@ class Cantilever:
             raise RuntimeError("Cantilever is not valid: type = 'none' and l_a > 0")
         return
 
-    def print_performance(self):
+    def print_performance(self) -> None:
+        """Print cantilever performance summary."""
         self.check_valid_cantilever()
 
         omega_damped_hz, Q = self.omega_damped_hz_and_Q()
         x, active_doping, total_doping = self.doping_profile()
         TMax_approx, TTip_approx = self.approxTempRise()
         TMax, TTip = self.calculateMaxAndTipTemp()
-        thermoLimit = self.thermo_integrated()/self.force_sensitivity()
+        thermoLimit = self.thermo_integrated() / self.force_sensitivity()
 
-        print '======================='
-        print 'Freq range: #f to #f' # (self.freq_min, self.freq_max)
-        print 'Operating fluid: #s' # self.fluid
-        print 'Cantilever L/W/T: #f #f #f' # (self.l*1e6, self.w*1e6, self.t*1e6)
-        print 'PR L/W: #f #f' # (self.l_pr()*1e6, self.w_pr()*1e6)
-        print 'PR Length Ratio: #g' # self.l_pr_ratio
+        print("=======================")
+        print(f"Freq range: {self.freq_min} to {self.freq_max}")
+        print(f"Operating fluid: {self.fluid}")
+        print(f"Cantilever L/W/T: {self.l*1e6} {self.w*1e6} {self.t*1e6}")
+        print(f"PR L/W: {self.l_pr()*1e6} {self.w_pr()*1e6}")
+        print(f"PR Length Ratio: {self.l_pr_ratio:g}")
 
-        print 'Force resolution (N): #g' # self.force_resolution()
-        print 'Force noise at 1 kHz (fN): #g' # self.force_noise_density(1e3)
-        print 'Displacement resolution (m): #g' # self.displacement_resolution()
-        print 'Force sensitivity (V/N) #g' # self.force_sensitivity()
-        print 'Displacement sensitivity (V/m) #g' # self.displacement_sensitivity()
-        print 'Beta #g' # self.beta()
-        print 'Thermomechanical force noise limit: #g' # thermoLimit
+        print(f"Force resolution (N): {self.force_resolution():g}")
+        print(f"Force noise at 1 kHz (fN): {self.force_noise_density(1e3):g}")
+        print(f"Displacement resolution (m): {self.displacement_resolution():g}")
+        print(f"Force sensitivity (V/N): {self.force_sensitivity():g}")
+        print(f"Displacement sensitivity (V/m): {self.displacement_sensitivity():g}")
+        print(f"Beta: {self.beta():g}")
+        print(f"Thermomechanical force noise limit: {thermoLimit:g}")
 
-        print 'Stiffness (N/m): #g' # self.stiffness()
-        print 'Vacuum freq: #f' # self.omega_vacuum_hz()
-        print 'Damped freq: #f' # omega_damped_hz
-        print 'Quality factor: #f' # Q
+        print(f"Stiffness (N/m): {self.stiffness():g}")
+        print(f"Vacuum freq: {self.omega_vacuum_hz()}")
+        print(f"Damped freq: {omega_damped_hz}")
+        print(f"Quality factor: {Q}")
 
-        print 'Wheatstone bridge bias voltage: #f' # self.v_bridge
-        print 'Resistance: #f' # self.resistance()
-        print 'Sheet Resistance: #f' # self.sheet_resistance()
-        print 'Power dissipation (mW): #g' # self.power_dissipation()*1e3
-        print 'Approx. Temp Rises (C) - Tip: #f  Max: #f' # (TTip_approx, TMax_approx)
-        print 'F-D Temp Rises (C)     - Tip: #f  Max: #f' # (TTip, TMax)
+        print(f"Wheatstone bridge bias voltage: {self.v_bridge}")
+        print(f"Resistance: {self.resistance()}")
+        print(f"Sheet Resistance: {self.sheet_resistance()}")
+        print(f"Power dissipation (mW): {self.power_dissipation()*1e3:g}")
+        print(f"Approx. Temp Rises (C) - Tip: {TTip_approx}  Max: {TMax_approx}")
+        print(f"F-D Temp Rises (C)     - Tip: {TTip}  Max: {TMax}")
 
-        print 'Integrated noise (V): #g' # self.integrated_noise()
-        print 'Integrated johnson noise (V): #g' # self.johnson_integrated()
-        print 'Integrated 1/f noise (V): #g' # self.hooge_integrated()
-        print 'Amplifier noise (V): #g' # self.amplifier_integrated()
-        print 'Thermomechanical noise (V): #g' # self.thermo_integrated()
+        print(f"Integrated noise (V): {self.integrated_noise():g}")
+        print(f"Integrated johnson noise (V): {self.johnson_integrated():g}")
+        print(f"Integrated 1/f noise (V): {self.hooge_integrated():g}")
+        print(f"Amplifier noise (V): {self.amplifier_integrated():g}")
+        print(f"Thermomechanical noise (V): {self.thermo_integrated():g}")
 
-        print 'Johnson/Hooge: #g' # (self.johnson_integrated()/self.hooge_integrated())
-        print 'Knee frequency (Hz): #g' # self.knee_frequency()
-        print 'Number of Carriers: #g' # self.number_of_carriers()
-        print 'Nz: #g' # self.Nz()
+        print(f"Johnson/Hooge: {self.johnson_integrated()/self.hooge_integrated():g}")
+        print(f"Knee frequency (Hz): {self.knee_frequency():g}")
+        print(f"Number of Carriers: {self.number_of_carriers():g}")
+        print(f"Nz: {self.Nz():g}")
 
-        print 'Number of silicon resistors: #f' # self.number_of_piezoresistors
-        print 'Si Thermal Conductivity (W/m-K): #f' # self.k_base()
-        print 'E (GPa): #f' # self.modulus()*1e-9
-        print 'Alpha: #g' # self.alpha
+        print(f"Number of silicon resistors: {self.number_of_piezoresistors}")
+        print(f"Si Thermal Conductivity (W/m-K): {self.k_base()}")
+        print(f"E (GPa): {self.modulus()*1e-9}")
+        print(f"Alpha: {self.alpha:g}")
 
-        if self.cantilever_type == 'step':
-            print '======================='
-            print 'Step at base (um): #f thick x #f long' # (1e6*self.t_a, 1e6*self.l_a)
-        elif self.cantilever_type == 'thermal':
-            print '======================='
+        if self.cantilever_type == "step":
+            print("=======================")
+            print(f"Step at base (um): {1e6*self.t_a} thick x {1e6*self.l_a} long")
+        elif self.cantilever_type == "thermal":
+            print("=======================")
             tau, freq = self.heaterTimeConstant()
-            print 'Actuator l/W/T: #f #f #f' # (1e6*self.l_a, 1e6*self.w_a, 1e6*self.t_a)
-            print 'Neutral axis (um): #f' # 1e6*self.actuatorNeutralAxis()
-            print 'Actuator Voltage (): #f' # self.v_actuator
-            print 'Heater resistance (kOhm): #f' # 1e-3*self.R_heater
-            print 'Actuator Power (mW): #f' # 1e3*self.heaterPower()
-            print 'Tip Deflection (nm): #f' # 1e9*self.tipDeflection()
-            print 'Time Constant (microseconds): #f' # tau*1e6
-            print '-3dB frequency (kHz): #f' # freq*1e-3
-        elif self.cantilever_type == 'piezoelectric':
-            print 'Actuator l/W/T: #f #f #f' # (1e6*self.l_a, 1e6*self.w_a, 1e6*self.t_a)
-            print 'Neutral axis (um): #f' # 1e6*self.actuatorNeutralAxis()
-            print 'Actuator Voltage (): #f' # self.v_actuator
-            print 'Tip Deflection (nm): #f' # 1e9*self.tipDeflectipon()
-        print '======================='
+            print(f"Actuator l/W/T: {1e6*self.l_a} {1e6*self.w_a} {1e6*self.t_a}")
+            print(f"Neutral axis (um): {1e6*self.actuatorNeutralAxis()}")
+            print(f"Actuator Voltage: {self.v_actuator}")
+            print(f"Heater resistance (kOhm): {1e-3*self.R_heater}")
+            print(f"Actuator Power (mW): {1e3*self.heaterPower()}")
+            print(f"Tip Deflection (nm): {1e9*self.tipDeflection()}")
+            print(f"Time Constant (microseconds): {tau*1e6}")
+            print(f"-3dB frequency (kHz): {freq*1e-3}")
+        elif self.cantilever_type == "piezoelectric":
+            print(f"Actuator l/W/T: {1e6*self.l_a} {1e6*self.w_a} {1e6*self.t_a}")
+            print(f"Neutral axis (um): {1e6*self.actuatorNeutralAxis()}")
+            print(f"Actuator Voltage: {self.v_actuator}")
+            print(f"Tip Deflection (nm): {1e9*self.tipDeflection()}")
+        print("=======================")
 
     def print_performance_for_excel(self):
         # TODO

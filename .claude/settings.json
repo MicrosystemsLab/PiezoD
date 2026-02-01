@@ -1,0 +1,77 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf ~/**)",
+      "Bash(rm -rf //**)",
+
+      "Bash(sudo *)",
+      "Bash(dd if=*)",
+      "Bash(mkfs.* *)",
+
+      "Bash(git remote add *)",
+      "Bash(git remote set-url *)",
+
+      "Bash(npm publish *)",
+      "Bash(pnpm publish *)",
+      "Bash(yarn publish *)",
+
+      "Bash(curl *|*sh*)",
+      "Bash(curl *|*bash*)",
+      "Bash(wget *|*sh*)",
+      "Bash(wget *|*bash*)",
+
+      "Bash(git commit --no-verify *)",
+      "Bash(git checkout *)"
+    ],
+    "allow": [
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(pnpm *)",
+      "Bash(bun *)",
+      "Bash(yarn *)",
+
+      "Bash(node *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(uv *)",
+      "Bash(poetry *)",
+
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(rg *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(rm *)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccusage@latest statusline",
+    "padding": 0
+  },
+
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "180000",
+    "BASH_MAX_TIMEOUT_MS": "600000",
+    "DISABLE_AUTOUPDATER": "0"
+  },
+
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": false,
+    "excludedCommands": [],
+    "network": {
+      "allowUnixSockets": ["/var/run/docker.sock"],
+      "allowLocalBinding": true
+    },
+    "allowUnsandboxedCommands": false
+  }
+}
