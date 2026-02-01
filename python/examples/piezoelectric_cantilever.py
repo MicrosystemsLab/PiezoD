@@ -17,7 +17,7 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
-plt.style.use("piezod")
+plt.style.use("piezod.default")
 
 from piezod import CantileverPiezoelectric, FluidType, PiezoMaterial
 
@@ -220,14 +220,13 @@ for L in lengths:
     _, Q = c_test.omega_damped_and_Q()
     Q_water.append(Q)
 
-ax5.semilogy(lengths * 1e6, Q_air, "b-", linewidth=2, label="Air")
-ax5.semilogy(lengths * 1e6, Q_water, "r-", linewidth=2, label="Water")
+ax5.semilogy(lengths * 1e6, Q_air, "b-", label="Air")
+ax5.semilogy(lengths * 1e6, Q_water, "r-", label="Water")
 ax5.set_xlabel("Cantilever Length (um)")
 ax5.set_ylabel("Quality Factor Q")
 ax5.set_title("Q Factor vs Cantilever Length (w = 50 um)")
 ax5.legend()
-ax5.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig("piezoelectric_Q_vs_length.png", dpi=150)
+plt.savefig("piezoelectric_Q_vs_length.png")
 print("Saved Q factor plot to: piezoelectric_Q_vs_length.png")

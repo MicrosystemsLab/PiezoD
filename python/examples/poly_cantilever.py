@@ -13,7 +13,7 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
-plt.style.use("piezod")
+plt.style.use("piezod.default")
 
 from piezod import CantileverPoly, Material
 

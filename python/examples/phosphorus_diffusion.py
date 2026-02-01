@@ -17,6 +17,8 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.style.use("piezod.default")
+
 from piezod import CantileverDiffusion, CantileverEpitaxy
 
 # Cantilever geometry - typical MEMS force sensor
@@ -148,8 +150,8 @@ fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 # Diffusion profile
 z_diff, active_diff, total_diff = c_diff.doping_profile()
 ax1 = axes[0]
-ax1.semilogy(z_diff * 1e9, active_diff, "b-", linewidth=2, label="Active")
-ax1.semilogy(z_diff * 1e9, total_diff, "r--", linewidth=2, label="Total")
+ax1.semilogy(z_diff * 1e9, active_diff, "b-", label="Active")
+ax1.semilogy(z_diff * 1e9, total_diff, "r--", label="Total")
 ax1.axhline(y=1e15, color="gray", linestyle=":", label="Background (1e15)")
 ax1.axvline(x=c_diff.junction_depth * 1e9, color="green", linestyle="--", label="Junction")
 ax1.set_xlabel("Depth (nm)")
@@ -157,12 +159,11 @@ ax1.set_ylabel("Concentration (cm$^{-3}$)")
 ax1.set_title(f"POCl3 Diffusion Profile\n({DIFFUSION_TEMP-273.15:.0f}C, {DIFFUSION_TIME/60:.0f} min)")
 ax1.legend()
 ax1.set_ylim([1e14, 1e22])
-ax1.grid(True, alpha=0.3)
 
 # Epitaxial profile (step function)
 z_epi, active_epi, total_epi = c_epi.doping_profile()
 ax2 = axes[1]
-ax2.semilogy(z_epi * 1e9, active_epi, "b-", linewidth=2, label="Active = Total")
+ax2.semilogy(z_epi * 1e9, active_epi, "b-", label="Active = Total")
 ax2.axhline(y=1e15, color="gray", linestyle=":", label="Background (1e15)")
 ax2.axvline(x=c_epi.junction_depth * 1e9, color="green", linestyle="--", label="Junction")
 ax2.set_xlabel("Depth (nm)")
@@ -170,10 +171,9 @@ ax2.set_ylabel("Concentration (cm$^{-3}$)")
 ax2.set_title(f"Epitaxial Profile\n(N = {c_epi.dopant_concentration:.0e} cm$^{{-3}}$)")
 ax2.legend()
 ax2.set_ylim([1e14, 1e22])
-ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig("doping_profiles_comparison.png", dpi=150)
+plt.savefig("doping_profiles_comparison.png")
 print("Saved doping profile comparison to: doping_profiles_comparison.png")
 
 # Plot temperature dependence of diffusion
@@ -196,7 +196,7 @@ for temp_c, color in zip(temps, colors):
         diffusion_temp=temp_c + 273.15,
     )
     z, active, total = c_temp.doping_profile()
-    ax3.semilogy(z * 1e9, active, color=color, linewidth=1.5, label=f"{temp_c}C")
+    ax3.semilogy(z * 1e9, active, color=color, label=f"{temp_c}C")
 
 ax3.axhline(y=1e15, color="gray", linestyle=":", alpha=0.5)
 ax3.set_xlabel("Depth (nm)")
@@ -204,8 +204,7 @@ ax3.set_ylabel("Active Concentration (cm$^{-3}$)")
 ax3.set_title("POCl3 Diffusion Profile vs Temperature\n(30 minute diffusion)")
 ax3.legend(title="Temperature")
 ax3.set_ylim([1e14, 1e22])
-ax3.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig("diffusion_temperature_dependence.png", dpi=150)
+plt.savefig("diffusion_temperature_dependence.png")
 print("Saved temperature dependence plot to: diffusion_temperature_dependence.png")

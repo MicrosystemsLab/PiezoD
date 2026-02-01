@@ -7,7 +7,7 @@ figure.facecolor: white
 figure.dpi: 100
 
 # Saving
-savefig.dpi: 150
+savefig.dpi: 300
 savefig.bbox: tight
 savefig.pad_inches: 0.1
 

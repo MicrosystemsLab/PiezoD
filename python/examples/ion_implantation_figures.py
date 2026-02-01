@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
 
+plt.style.use("piezod.default")
+
 # Load lookup table
 lookup_path = Path(__file__).parent.parent.parent / "matlab" / "PiezoD" / "lookupTable.mat"
 mat_data = scipy.io.loadmat(str(lookup_path), squeeze_me=True)
