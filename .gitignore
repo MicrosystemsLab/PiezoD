@@ -51,6 +51,14 @@ nul
 # Mac crap
 .DS_Store
 
+# TCAD tools (require registration, cannot redistribute)
+lookupTableGeneration/FLOOXS_*/
+
+# TCAD simulation outputs (keep .gitkeep and templates)
+lookupTableGeneration/simulations/*.out
+lookupTableGeneration/simulations/*.log
+lookupTableGeneration/simulations/*.str
+
 # Binary/generated files
 *.png
 *.jpg

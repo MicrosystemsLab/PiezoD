@@ -1,0 +1,23 @@
+# Simulation outputs
+simulationInputs/
+simulationOutputs/
+*.out
+
+# Data files
+*.mat
+
+# Documentation
+*.md
+
+# Legacy scripts
+*.py
+*.m
+simulation.template
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore

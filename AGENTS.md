@@ -28,10 +28,11 @@ PiezoD/
 │   ├── tests/                   # Test suite (empty)
 │   ├── examples/                # Usage examples
 │   └── archive/                 # Legacy/experimental scripts
-├── lookupTableGeneration/       # COMSOL simulation scripts
-│   ├── simulationControl.py     # COMSOL automation
-│   ├── postProcessTables.m      # Post-processing
-│   ├── simulation.template      # COMSOL template
+├── lookupTableGeneration/       # FLOOXS TCAD simulation (Docker)
+│   ├── Dockerfile               # FLOOXS build instructions
+│   ├── docker-compose.yml       # Container service definition
+│   ├── simulations/             # Input/output directory
+│   ├── postProcessTables.m      # Post-processing (legacy)
 │   └── lookupTable.mat          # Generated data
 ├── Docs/                        # Website (jemdoc)
 │   ├── html/                    # Generated HTML

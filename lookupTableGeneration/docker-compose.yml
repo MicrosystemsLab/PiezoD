@@ -1,0 +1,7 @@
+services:
+  flooxs:
+    build: .
+    image: piezod/flooxs:2026
+    volumes:
+      - ./simulations:/work
+    working_dir: /work
