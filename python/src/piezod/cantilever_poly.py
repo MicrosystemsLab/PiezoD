@@ -172,18 +172,22 @@ class CantileverPoly:
             Neutral axis position (m)
         """
         # Centroid positions of each layer from bottom
-        z = np.array([
-            self.t_bot / 2,
-            self.t_bot + self.t_mid / 2,
-            self.t_bot + self.t_mid + self.t_top / 2,
-        ])
+        z = np.array(
+            [
+                self.t_bot / 2,
+                self.t_bot + self.t_mid / 2,
+                self.t_bot + self.t_mid + self.t_top / 2,
+            ]
+        )
 
         # Elastic moduli
-        E = np.array([
-            self._get_elastic_modulus(self.matl_bot),
-            self._get_elastic_modulus(self.matl_mid),
-            self._get_elastic_modulus(self.matl_top),
-        ])
+        E = np.array(
+            [
+                self._get_elastic_modulus(self.matl_bot),
+                self._get_elastic_modulus(self.matl_mid),
+                self._get_elastic_modulus(self.matl_top),
+            ]
+        )
 
         # Cross-sectional areas
         A = self.w * np.array([self.t_bot, self.t_mid, self.t_top])
@@ -200,27 +204,33 @@ class CantileverPoly:
         Zm = self.neutral_axis()
 
         # Distance from neutral axis to each layer centroid
-        z = np.array([
-            self.t_bot / 2,
-            self.t_bot + self.t_mid / 2,
-            self.t_bot + self.t_mid + self.t_top / 2,
-        ])
+        z = np.array(
+            [
+                self.t_bot / 2,
+                self.t_bot + self.t_mid / 2,
+                self.t_bot + self.t_mid + self.t_top / 2,
+            ]
+        )
         Z = z - Zm
 
         # Elastic moduli
-        E = np.array([
-            self._get_elastic_modulus(self.matl_bot),
-            self._get_elastic_modulus(self.matl_mid),
-            self._get_elastic_modulus(self.matl_top),
-        ])
+        E = np.array(
+            [
+                self._get_elastic_modulus(self.matl_bot),
+                self._get_elastic_modulus(self.matl_mid),
+                self._get_elastic_modulus(self.matl_top),
+            ]
+        )
 
         # Cross-sectional areas and second moments of area
         A = self.w * np.array([self.t_bot, self.t_mid, self.t_top])
-        I = self.w * np.array([
-            self.t_bot**3 / 12,
-            self.t_mid**3 / 12,
-            self.t_top**3 / 12,
-        ])
+        I = self.w * np.array(
+            [
+                self.t_bot**3 / 12,
+                self.t_mid**3 / 12,
+                self.t_top**3 / 12,
+            ]
+        )
 
         # EI_effective using parallel axis theorem
         return float(1.0 / np.sum(E * (I + A * Z**2)))
@@ -240,11 +250,13 @@ class CantileverPoly:
         Returns:
             Resonant frequency (Hz)
         """
-        densities = np.array([
-            self._get_density(self.matl_bot),
-            self._get_density(self.matl_mid),
-            self._get_density(self.matl_top),
-        ])
+        densities = np.array(
+            [
+                self._get_density(self.matl_bot),
+                self._get_density(self.matl_mid),
+                self._get_density(self.matl_top),
+            ]
+        )
         thicknesses = np.array([self.t_bot, self.t_mid, self.t_top])
 
         # Effective mass (0.243 is the first mode coefficient)
@@ -273,9 +285,7 @@ class CantileverPoly:
         alpha = 0.711
         beta = 1.98
 
-        mobility = mu_0 + (mu_max - mu_0) / (1 + (n / C_r) ** alpha) - mu_1 / (
-            1 + (C_s / n) ** beta
-        )
+        mobility = mu_0 + (mu_max - mu_0) / (1 + (n / C_r) ** alpha) - mu_1 / (1 + (C_s / n) ** beta)
 
         # 50% reduction for polycrystalline silicon
         return mobility * 0.5
@@ -350,12 +360,7 @@ class CantileverPoly:
         Returns:
             Voltage PSD (V^2/Hz)
         """
-        return (
-            self.alpha
-            * self.v_bridge**2
-            * self.number_of_piezoresistors
-            / (4 * self.number_of_carriers() * freq)
-        )
+        return self.alpha * self.v_bridge**2 * self.number_of_piezoresistors / (4 * self.number_of_carriers() * freq)
 
     def hooge_integrated(self) -> float:
         """Calculate integrated 1/f noise.
@@ -363,9 +368,7 @@ class CantileverPoly:
         Returns:
             Integrated noise voltage (V)
         """
-        freq = np.logspace(
-            np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints
-        )
+        freq = np.logspace(np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints)
         return float(np.sqrt(np.trapezoid(self.hooge_PSD(freq), freq)))
 
     def johnson_PSD(self, freq: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -385,9 +388,7 @@ class CantileverPoly:
         Returns:
             Integrated noise voltage (V)
         """
-        freq = np.logspace(
-            np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints
-        )
+        freq = np.logspace(np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints)
         return float(np.sqrt(np.trapezoid(self.johnson_PSD(freq), freq)))
 
     def thermo_PSD(self, freq: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -416,9 +417,7 @@ class CantileverPoly:
         Returns:
             Integrated noise voltage (V)
         """
-        freq = np.logspace(
-            np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints
-        )
+        freq = np.logspace(np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints)
         return float(np.sqrt(np.trapezoid(self.thermo_PSD(freq), freq)))
 
     def amplifier_PSD(self, freq: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -439,10 +438,7 @@ class CantileverPoly:
         A_IF = 25e-12  # A/sqrt(Hz) @ 1 Hz
 
         R_effective = self.resistance() / 2
-        return (
-            (A_VJ**2 + 2 * (R_effective * A_IJ) ** 2)
-            + (A_VF**2 + 2 * (R_effective * A_IF) ** 2) / freq
-        )
+        return (A_VJ**2 + 2 * (R_effective * A_IJ) ** 2) + (A_VF**2 + 2 * (R_effective * A_IF) ** 2) / freq
 
     def amplifier_integrated(self) -> float:
         """Calculate integrated amplifier noise.
@@ -450,9 +446,7 @@ class CantileverPoly:
         Returns:
             Integrated noise voltage (V)
         """
-        freq = np.logspace(
-            np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints
-        )
+        freq = np.logspace(np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints)
         return float(np.sqrt(np.trapezoid(self.amplifier_PSD(freq), freq)))
 
     def actuator_noise_integrated(self) -> float:
@@ -483,16 +477,9 @@ class CantileverPoly:
         Returns:
             Integrated noise voltage (V)
         """
-        freq = np.logspace(
-            np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints
-        )
+        freq = np.logspace(np.log10(self.freq_min), np.log10(self.freq_max), self.numFrequencyPoints)
         actuator = self.actuator_noise_integrated()
-        total_psd = (
-            self.johnson_PSD(freq)
-            + self.hooge_PSD(freq)
-            + self.thermo_PSD(freq)
-            + self.amplifier_PSD(freq)
-        )
+        total_psd = self.johnson_PSD(freq) + self.hooge_PSD(freq) + self.thermo_PSD(freq) + self.amplifier_PSD(freq)
         return float(np.sqrt(actuator**2 + np.trapezoid(total_psd, freq)))
 
     def piezo_coefficient(self) -> float:
@@ -567,11 +554,7 @@ class CantileverPoly:
         Returns:
             Power dissipation (W)
         """
-        return (
-            self.number_of_piezoresistors_on_cantilever
-            * self.v_bridge**2
-            / (4 * self.resistance())
-        )
+        return self.number_of_piezoresistors_on_cantilever * self.v_bridge**2 / (4 * self.resistance())
 
     def force_resolution(self) -> float:
         """Calculate minimum detectable force.
@@ -592,14 +575,8 @@ class CantileverPoly:
     def print_performance(self) -> None:
         """Print cantilever performance summary."""
         print(f"Cantilever L/W: {self.l * 1e6:.1f} {self.w * 1e6:.1f} um")
-        print(
-            f"Layers - Bottom:{self.matl_bot.value} Mid:{self.matl_mid.value} "
-            f"Top:{self.matl_top.value}"
-        )
-        print(
-            f"Thicknesses (nm) - Bottom:{self.t_bot * 1e9:.1f} "
-            f"Mid:{self.t_mid * 1e9:.1f} Top:{self.t_top * 1e9:.1f}"
-        )
+        print(f"Layers - Bottom:{self.matl_bot.value} Mid:{self.matl_mid.value} Top:{self.matl_top.value}")
+        print(f"Thicknesses (nm) - Bottom:{self.t_bot * 1e9:.1f} Mid:{self.t_mid * 1e9:.1f} Top:{self.t_top * 1e9:.1f}")
         print(f"PR Length Ratio: {self.l_pr_ratio}")
         print(f"Bridge voltage: {self.v_bridge} V")
         print(f"Number of piezoresistors: {self.number_of_piezoresistors}")

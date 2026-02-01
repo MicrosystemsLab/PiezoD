@@ -100,9 +100,7 @@ class CantileverPiezoelectric:
     # Sader lookup table for hydrodynamic function
     # kappa = C * w / l, where C = 1.8751 for first mode
     KAPPA_LOOKUP = np.array([0, 0.125, 0.25, 0.5, 0.75, 1, 2, 3, 5, 7, 10, 20])
-    REYNOLDS_LOOKUP = np.array(
-        [-4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
-    )
+    REYNOLDS_LOOKUP = np.array([-4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4])
 
     # fmt: off
     TAU_LOOKUP_REAL = np.array([
@@ -255,11 +253,16 @@ class CantileverPiezoelectric:
     @property
     def effective_mass(self) -> float:
         """Calculate effective mass (kg)."""
-        return 0.243 * self.w_si * self.l_si * (
-            self.t_si * self.RHO_SI
-            + self.T_BOTTOM_ELECTRODE * self.RHO_ELECTRODE
-            + self.t_pe * self.rho_pe
-            + self.T_TOP_ELECTRODE * self.RHO_ELECTRODE
+        return (
+            0.243
+            * self.w_si
+            * self.l_si
+            * (
+                self.t_si * self.RHO_SI
+                + self.T_BOTTOM_ELECTRODE * self.RHO_ELECTRODE
+                + self.t_pe * self.rho_pe
+                + self.T_TOP_ELECTRODE * self.RHO_ELECTRODE
+            )
         )
 
     @property
@@ -321,9 +324,7 @@ class CantileverPiezoelectric:
     def v_f_sensitivity(self, freq: NDArray[np.float64]) -> NDArray[np.float64]:
         """Calculate voltage force sensitivity (V/N)."""
         omega = 2 * np.pi * freq
-        return 2 * omega * self.q_f_sensitivity_intrinsic * self.R_half / (
-            1 + omega * self.R_half * self.C_half
-        )
+        return 2 * omega * self.q_f_sensitivity_intrinsic * self.R_half / (1 + omega * self.R_half * self.C_half)
 
     def v_x_sensitivity(self, freq: NDArray[np.float64]) -> NDArray[np.float64]:
         """Calculate voltage displacement sensitivity (V/m)."""
@@ -377,9 +378,7 @@ class CantileverPiezoelectric:
             if omega_d <= 0:
                 return 1e10
             hydro = self._hydrodynamic_function(omega_d, rho_f, eta_f)
-            target = omega_vac * (
-                1 + np.pi * rho_f * self.w_si / (4 * self.RHO_SI * self.t_si) * hydro.real
-            ) ** -0.5
+            target = omega_vac * (1 + np.pi * rho_f * self.w_si / (4 * self.RHO_SI * self.t_si) * hydro.real) ** -0.5
             return (omega_d - target) ** 2
 
         result = minimize_scalar(residual, bounds=(0, omega_vac), method="bounded")
