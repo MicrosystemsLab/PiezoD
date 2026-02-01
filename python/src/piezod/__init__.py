@@ -4,8 +4,12 @@ from piezod.cantilever import Cantilever
 from piezod.cantilever_diffusion import CantileverDiffusion
 from piezod.cantilever_epitaxy import CantileverEpitaxy
 from piezod.cantilever_implantation import CantileverImplantation
-from piezod.cantilever_piezoelectric import CantileverPiezoelectric
-from piezod.cantilever_poly import CantileverPoly
+from piezod.cantilever_piezoelectric import (
+    CantileverPiezoelectric,
+    FluidType,
+    PiezoMaterial,
+)
+from piezod.cantilever_poly import CantileverPoly, Material
 
 __all__ = [
     "Cantilever",
@@ -14,6 +18,9 @@ __all__ = [
     "CantileverImplantation",
     "CantileverPiezoelectric",
     "CantileverPoly",
+    "FluidType",
+    "Material",
+    "PiezoMaterial",
 ]
 
 __version__ = "0.1.0"

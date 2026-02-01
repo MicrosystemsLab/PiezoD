@@ -2,7 +2,7 @@ import math
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import interpolate, optimize
+from scipy import integrate, interpolate, optimize
 
 
 class Cantilever:
@@ -555,7 +555,7 @@ class Cantilever:
     def doping_optimization_scaling(self):
         raise NotImplementedError("Implement doping_optimization_scaling() in your Cantilever subclass")
 
-    def doping_cantilever_from_state(self):
+    def doping_cantilever_from_state(self, x0):
         raise NotImplementedError("Implement doping_cantilever_from_state() in your Cantilever subclass")
 
     def doping_current_state(self):
@@ -671,6 +671,10 @@ class Cantilever:
         self.air_gap_width = 2e-6  # The width between the two cantilever legs. Significant if l_pr is small
 
         self.fluid = "air"
+        self.rho_arb = 1.0  # Arbitrary fluid density (kg/m^3)
+        self.eta_arb = 1e-3  # Arbitrary fluid viscosity (Pa-s)
+        self.k_arb = 0.1  # Arbitrary fluid thermal conductivity (W/m-K)
+        self.h_arb = 100  # Arbitrary fluid heat transfer coefficient (W/m^2-K)
         self.h_method = "fixed"
         self.metal_type = "aluminum"
         self.film_stress = "nominal"
@@ -699,6 +703,7 @@ class Cantilever:
         self.temperature_dependent_properties = "no"
         self.thermal_modeling = "none"
         self.R_base = 10e3
+        self.R_heater = 1e3
 
     def l_pr(self):
         return self.l * self.l_pr_ratio
@@ -938,10 +943,8 @@ class Cantilever:
         TPR = self.piezoresistor_temp()
         resistance *= 1 + TPR * self.TCR
 
-        if self.number_of_piezoresistors == 4:
-            R_external = resistance
-        else:  # If we're using 2 piezoresistors, assume ideal 1 kOhm resistors
-            R_external = 1e3
+        # If using 2 piezoresistors, assume ideal 1 kOhm external resistors
+        R_external = resistance if self.number_of_piezoresistors == 4 else 1e3
 
         return 4 * self.k_b * TPR * (resistance / 2 + R_external / 2) * np.ones((1, freq.size))
 
@@ -952,10 +955,7 @@ class Cantilever:
         TPR = self.approxPRTemp()
         resistance *= 1 + TPR * self.TCR
 
-        if self.number_of_piezoresistors == 4:
-            R_external = resistance
-        else:
-            R_external = 700
+        R_external = resistance if self.number_of_piezoresistors == 4 else 700
         return math.sqrt(4 * self.k_b * TPR * (resistance / 2 + R_external / 2) * (self.freq_max - self.freq_min))
 
     def piezoresistor_temp(self):
@@ -1114,7 +1114,7 @@ class Cantilever:
         noise = self.voltage_noise(frequency)
         sensitivity = self.force_sensitivity()
         force_noise_density = noise / sensitivity
-        return math.sqrt(np.cumtrapz(frequency, force_noise_density**2))
+        return np.sqrt(integrate.cumulative_trapezoid(force_noise_density**2, frequency, initial=0))
 
     # Piezoresistance factor
     # Accounts for dopant concentration dependent piezoresistivity in silicon
@@ -1189,10 +1189,7 @@ class Cantilever:
         w_pr = self.w_pr()
 
         # Pick the relative transverse PR coefficient for the doping type
-        if self.doping_type == "boron":
-            transverse_factor = -1
-        else:
-            transverse_factor = -0.5
+        transverse_factor = -1 if self.doping_type == "boron" else -0.5
 
         # Average length from the base to the piezoresistor centroid
         longitudinal_l_avg = self.l - l_pr / 2
@@ -1406,7 +1403,7 @@ class Cantilever:
 
         E_metal, rho_metal, k_metal, alpha_metal = self.lookup_metal_properties()
         l_healing_step = 0
-        if self.cantilever_type == "step" or self.cantileveR_type == "thermal":
+        if self.cantilever_type == "step" or self.cantilever_type == "thermal":
             l_healing_step = math.sqrt(
                 self.w_a
                 * (k_c * self.t + self.k_sio2 * self.t_oxide + k_metal * self.t_a)
@@ -1634,7 +1631,9 @@ class Cantilever:
             x_resistor = x[pr_indices]
             Rsheet_resistor = Rsheet_x[pr_indices]
             R_calc = (
-                2 * np.trapezoid(x_resistor, Rsheet_resistor / self.w_pr()) + 3.4 * Rsheet_resistor[-1] + 2 * self.R_contact
+                2 * np.trapezoid(x_resistor, Rsheet_resistor / self.w_pr())
+                + 3.4 * Rsheet_resistor[-1]
+                + 2 * self.R_contact
             )
             Rsheet_x = Rsheet_x * (R_nominal / R_calc)
 
@@ -1844,8 +1843,8 @@ class Cantilever:
         C[x > self.l_a] = 0
 
         # Calculate the deflection from the curvature by integrating
-        theta = np.integrate.cumtrapz(x, C)
-        deflection = np.integrate.cumtrapz(x, np.tan(theta))
+        theta = integrate.cumulative_trapezoid(C, x, initial=0)
+        deflection = integrate.cumulative_trapezoid(np.tan(theta), x, initial=0)
         return x, deflection
 
     # Calculate the stress as a function along the actuator length
@@ -1916,7 +1915,7 @@ class Cantilever:
         plt.plot(x_vals * 1e6, z * 1e6)
         plt.xlabel(r"Distance from base ($\mu$m)")
         plt.ylabel(r"Deflection ($\mu$m)")
-        plt.box("off")
+        plt.box(False)
 
     def film_intrinsic_stress(self):
         # film_stress = 'nominal' => use average stress
@@ -2095,10 +2094,8 @@ class Cantilever:
             x, Q, temp = self.calculateTempProfile()
 
         plt.figure()
-        plt.hold("on")
         plt.plot(1e6 * x, temp)
         plt.plot(1e6 * x, Q, "--")
-        plt.hold("off")
         plt.xlabel("X (um)")
         plt.ylabel("Temp Rise (K)")
         plt.legend("Temperature", "Power/Unit Length")
@@ -2112,7 +2109,6 @@ class Cantilever:
         plt.ylabel(r"Power ($\mu$W/$\mu$m)")
 
         plt.subplot(2, 1, 2)
-        plt.hold(True)
         plt.plot(1e6 * x, temp)
 
         v_actuator_temp = self.v_actuator
@@ -2123,7 +2119,7 @@ class Cantilever:
         plt.plot(1e6 * x, temp)
         plt.xlabel(r"Distance from base ($\mu$m)")
         plt.ylabel(r"$\Delta$T (K)")
-        plt.box("off")
+        plt.box(False)
 
     def plot_thermal_conductivity_profile(self):
         x, z, k = self.thermal_conductivity_profile(self.T)
@@ -2167,13 +2163,11 @@ class Cantilever:
         freq = np.logspace(math.log10(self.freq_min), math.log10(self.freq_max), Cantilever.numFrequencyPoints)
 
         plt.figure()
-        plt.hold("on")
         plt.plot(freq, math.sqrt(self.johnson_PSD(freq)))
         plt.plot(freq, math.sqrt(self.hooge_PSD(freq)))
         plt.plot(freq, math.sqrt(self.thermo_PSD(freq)))
         plt.plot(freq, math.sqrt(self.amplifier_PSD(freq)))
         plt.plot(freq, self.voltage_noise(freq))
-        plt.hold("off")
         plt.gca().set_xscale("log")
         plt.gca().set_yscale("log")
         plt.ylabel("Noise Voltage Spectral Density (V/rtHz)")

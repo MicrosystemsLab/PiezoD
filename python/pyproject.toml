@@ -34,6 +34,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
+    "ty>=0.0.14",
 ]
 
 [project.urls]
@@ -60,5 +61,16 @@ ignore = [
     "SIM108", # Allow if/else blocks instead of ternary (more readable with comments)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"cantilever_piezoelectric.py" = ["E501"]  # Lookup tables exceed line length
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "ty>=0.0.14",
+]

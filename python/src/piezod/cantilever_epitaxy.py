@@ -155,7 +155,7 @@ class CantileverEpitaxy(Cantilever):
         t_pr_ratio_scale = 10.0
         return np.array([concentration_scale, t_pr_ratio_scale])
 
-    def doping_cantilever_from_state(self, x0: NDArray[np.float64]) -> None:  # type: ignore[override]
+    def doping_cantilever_from_state(self, x0: NDArray[np.float64]) -> None:
         """Reconstruct cantilever doping parameters from optimization state.
 
         Args:

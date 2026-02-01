@@ -209,5 +209,3 @@ ax3.grid(True, alpha=0.3)
 plt.tight_layout()
 plt.savefig("diffusion_temperature_dependence.png", dpi=150)
 print("Saved temperature dependence plot to: diffusion_temperature_dependence.png")
-
-plt.show()

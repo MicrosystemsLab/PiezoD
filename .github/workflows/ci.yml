@@ -13,35 +13,31 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: astral-sh/setup-uv@v4
-      - name: Lint
-        run: uvx ruff check src tests --extend-select I,B,SIM,C4,ISC,PIE
-        working-directory: python
-      - name: Format check
-        run: uvx ruff format src tests --check
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --dev --frozen
         working-directory: python
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - name: Install dependencies
-        run: uv sync --dev
+      - name: Lint
+        run: uv run ruff check src tests
         working-directory: python
+
+      - name: Format check
+        run: uv run ruff format src tests --check
+        working-directory: python
+
+      - name: Type check
+        run: uv run ty check src
+        working-directory: python
+
       - name: Run tests
         run: uv run pytest --cov=piezod --cov-report=term-missing
-        working-directory: python
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - name: Type check
-        run: uvx ty check src
         working-directory: python

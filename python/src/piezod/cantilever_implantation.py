@@ -114,14 +114,6 @@ class CantileverImplantation(Cantilever):
         """
         self.lookupTableData = lookup_data
 
-    def _require_lookup_table(self) -> None:
-        """Raise error if lookup table not loaded."""
-        if self.lookupTableData is None:
-            raise RuntimeError(
-                "Lookup table not loaded. Call load_lookup_table() first or "
-                "provide lookup table data during initialization."
-            )
-
     def anneal_number(self) -> int:
         """Convert annealing type to lookup table index.
 
@@ -153,7 +145,8 @@ class CantileverImplantation(Cantilever):
         Raises:
             RuntimeError: If lookup table not loaded
         """
-        self._require_lookup_table()
+        if self.lookupTableData is None:
+            raise RuntimeError("Lookup table not loaded. Call load_lookup_table() first.")
 
         # Convert temperatures from K to C and time from seconds to minutes
         anneal_temp_c = self.annealing_temp - 273
@@ -203,7 +196,8 @@ class CantileverImplantation(Cantilever):
             limit, which is generally not the case in the ion implantation data.
             Data beyond the device thickness is removed.
         """
-        self._require_lookup_table()
+        if self.lookupTableData is None:
+            raise RuntimeError("Lookup table not loaded. Call load_lookup_table() first.")
 
         # Convert from microns to meters
         x = self.lookupTableData["z"] * 1e-6  # 10nm spacing from 0 to 5um
