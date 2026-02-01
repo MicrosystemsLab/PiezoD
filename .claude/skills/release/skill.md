@@ -1,18 +1,18 @@
 ---
-name: new-release
+name: release
 description: Create a new release of the piezod package. Bumps version, creates GitHub release, and publishes to PyPI.
 allowed-tools: Read, Edit, Bash, AskUserQuestion
 ---
 
-# New Release
+# Release
 
 Creates a new release of the piezod Python package.
 
 ## Usage
 
 ```
-/new-release
-/new-release 0.2.0
+/release
+/release 0.2.0
 ```
 
 If no version is provided, suggests a patch increment.
@@ -32,15 +32,20 @@ If no version is provided, suggests a patch increment.
    git branch --show-current
    git fetch origin && git status -uno
    ```
-4. Get commits since last release:
+4. Get changes since last release:
    ```bash
    git log v{GITHUB_VERSION}..HEAD --oneline --no-merges
+   git diff v{GITHUB_VERSION}..HEAD --stat
    ```
-5. Generate release notes: one bullet per commit, excluding:
-   - Version bump commits ("Release v...")
-   - Trivial commits (typos, formatting)
-   - Skill/agent updates (.claude directory changes)
-   - CI/workflow updates (.github directory changes)
+5. Read the key changed files to understand what actually changed
+6. Generate release notes by summarizing significant user-facing changes:
+   - New features or capabilities
+   - Bug fixes that affected users
+   - Breaking changes or API modifications
+   - Performance improvements
+
+   Ignore internal changes (CI, tooling, refactoring without behavior change).
+   Write 2-5 bullets in plain language describing what users can now do or what's fixed.
 
 **Abort conditions:**
 - Working tree has uncommitted changes
@@ -70,8 +75,7 @@ Display this exact format and ask for confirmation:
 - Git: clean, on master, up-to-date
 
 ### Release Notes
-- {BULLET_POINT_PER_SIGNIFICANT_COMMIT}
-- ...
+{2-5 BULLETS SUMMARIZING USER-FACING CHANGES}
 
 ### Steps to Execute
 1. Update pyproject.toml version: {OLD} -> {NEW}
