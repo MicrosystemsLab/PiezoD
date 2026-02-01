@@ -39,7 +39,22 @@ docker compose run --rm flooxs /bin/bash
 
 1. Generate inputs - Python script creates FLOOXS input files in `simulations/`
 2. Run simulations - `docker compose run` executes FLOOXS on each input
-3. Post-process - Python/MATLAB extracts profiles and builds lookup table
+3. Post-process - Python extracts profiles and builds lookup table
+
+## Structure
+
+```
+lookupTableGeneration/
+├── Dockerfile
+├── docker-compose.yml
+├── templates/
+│   └── ion_implant.tcl      # FLOOXS simulation template
+├── simulations/             # Input/output directory (mounted in container)
+└── legacy/                  # TSUPREM-4 reference files
+    ├── simulation.template
+    ├── simulationControl.py
+    └── postProcessTables.m
+```
 
 ## Parameter Space
 
@@ -48,19 +63,8 @@ docker compose run --rm flooxs /bin/bash
 | Dopants | Boron, Phosphorus, Arsenic |
 | Doses | 2e14, 2e15, 2e16 cm^-2 |
 | Energies | 20, 50, 80 keV |
-| Anneal times | 15, 30, 45, 60, 75, 90, 105, 120 min |
+| Anneal times | 15, 30, 45, 60, 75, 90, 105, 120, 180, 240, ..., 900 min |
 | Anneal temps | 900, 1000, 1100 C |
 | Oxidation | With/without passivation oxide |
 
-Total: 3 x 3 x 3 x 8 x 3 x 2 = 1296 simulations
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `docker-compose.yml` | Container service definition |
-| `Dockerfile` | FLOOXS build instructions |
-| `simulations/` | Input/output directory (mounted in container) |
-| `postProcessTables.m` | MATLAB post-processor (legacy) |
-| `simulation.template` | TSUPREM-4 template (legacy, needs conversion) |
-| `simulationControl.py` | Python 2 runner (legacy, needs rewrite) |
+Total: 3 x 3 x 3 x 21 x 3 x 2 = 3402 simulations

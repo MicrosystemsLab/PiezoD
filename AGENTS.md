@@ -31,8 +31,9 @@ PiezoD/
 ├── lookupTableGeneration/       # FLOOXS TCAD simulation (Docker)
 │   ├── Dockerfile               # FLOOXS build instructions
 │   ├── docker-compose.yml       # Container service definition
+│   ├── templates/               # FLOOXS simulation templates
 │   ├── simulations/             # Input/output directory
-│   ├── postProcessTables.m      # Post-processing (legacy)
+│   ├── legacy/                  # TSUPREM-4 reference files
 │   └── lookupTable.mat          # Generated data
 ├── Docs/                        # Website (jemdoc)
 │   ├── html/                    # Generated HTML
