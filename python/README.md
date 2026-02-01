@@ -19,10 +19,26 @@ uv sync
 ## Usage
 
 ```python
-from piezod import Cantilever, CantileverEpitaxy
+from piezod import CantileverEpitaxy
 
+# Create cantilever and set geometry
 c = CantileverEpitaxy()
-c.doping_profile()
+c.l = 300e-6  # length: 300 um
+c.w = 44e-6   # width: 44 um
+c.t = 89e-9   # thickness: 89 nm
+c.fluid = "water"
+
+# Calculate properties
+print(f"Stiffness: {c.stiffness() * 1e3:.3f} mN/m")
+print(f"Resonant frequency: {c.omega_vacuum_hz() / 1e3:.1f} kHz")
+freq_hz, Q = c.omega_damped_hz_and_Q()
+print(f"Damped frequency: {freq_hz / 1e3:.1f} kHz, Q = {Q:.1f}")
+```
+
+Run the example:
+
+```bash
+uv run python examples/quickstart.py
 ```
 
 ## Development

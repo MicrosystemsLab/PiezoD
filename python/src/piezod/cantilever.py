@@ -61,6 +61,10 @@ class Cantilever:
     # Used to predict resistance change with self-heating in the advanced thermal models
     TCR = 1372e-6
 
+    # Default Hooge noise parameter (unitless)
+    # Used by epitaxy and diffusion subclasses
+    default_alpha = 1e-5
+
     # Intrinsic stress (Pa)
     # For modeling tip deflection from film stress. Doping stress is treated separately elsewhere in the code
     # film_stress == 'nominal' uses the average
@@ -2347,7 +2351,7 @@ class Cantilever:
         if self.fluid == "vacuum":
             omega_damped = self.omega_vacuum()
             Q = Cantilever.maxQ
-            return
+            return omega_damped, Q
 
         # Inner function for solving the transcendental eqn to find
         # omega_damped. We're searching for a function minimum, so return
@@ -2365,7 +2369,7 @@ class Cantilever:
         rho_f, eta_f = self.lookupFluidProperties()
         omega_vacuum = self.omega_vacuum()
 
-        omega_damped = optimize.fminbound(find_natural_frequency, 10, omega_vacuum, "xtol", 1e-12)
+        omega_damped = optimize.fminbound(find_natural_frequency, 10, omega_vacuum, xtol=1e-12)
 
         hydro = self.hydrodynamic_function(omega_damped, rho_f, eta_f)
         Q = (4 * self.rho_si * self.t / (math.pi * rho_f * self.w) + np.real(hydro)) / np.imag(hydro)
@@ -2396,13 +2400,18 @@ class Cantilever:
 
         # If the Reynolds number gets too small, the calculation gets upset
         log_Beta = max(log_Beta, min(self.Beta_lookup))
-        gamma_real = interpolate.interp2d(
-            Cantilever.A_lookup, Cantilever.Beta_lookup, Cantilever.gamma_lookup_real, A, log_Beta, "spline"
+
+        # Interpolate from lookup tables using RectBivariateSpline
+        # gamma arrays are shaped (len(Beta_lookup), len(A_lookup))
+        interp_real = interpolate.RectBivariateSpline(
+            Cantilever.Beta_lookup, Cantilever.A_lookup, Cantilever.gamma_lookup_real
         )
-        gamma_imag = interpolate.interp2d(
-            Cantilever.A_lookup, Cantilever.Beta_lookup, Cantilever.gamma_lookup_imag, A, log_Beta, "spline"
+        interp_imag = interpolate.RectBivariateSpline(
+            Cantilever.Beta_lookup, Cantilever.A_lookup, Cantilever.gamma_lookup_imag
         )
-        hydro = np.complex(gamma_real, gamma_imag)
+        gamma_real = interp_real(log_Beta, A)[0, 0]
+        gamma_imag = interp_imag(log_Beta, A)[0, 0]
+        hydro = complex(gamma_real, gamma_imag)
         return hydro
 
     # # ========= Optimization ==========
