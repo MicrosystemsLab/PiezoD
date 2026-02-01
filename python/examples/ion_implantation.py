@@ -40,11 +40,11 @@ V_BRIDGE = 2.0  # Wheatstone bridge bias (V), constrained by power dissipation
 IMPLANT_DOSE = 5e15  # 5e15 cm^-2
 IMPLANT_ENERGY = 50  # 50 keV
 
-# Annealing parameters
-# Wet oxidation at 1000C for 15 min + N2 anneal at 1000C for 10 min
-# Results in sqrt(Dt) ~ 0.037 um and 150 nm passivation oxide
+# Annealing parameters (from Table III)
+# Paper: Wet oxidation 15 min + N2 anneal 300 min = 315 min total
+# Lookup table max is 120 min, so we use that (sqrt(Dt) won't match exactly)
 ANNEAL_TEMP = 1000 + 273.15  # 1000C in Kelvin
-ANNEAL_TIME = 25 * 60  # 25 minutes total (seconds)
+ANNEAL_TIME = 120 * 60  # 120 min (lookup table max), paper uses 315 min
 
 c = CantileverImplantation(
     freq_min=FREQ_MIN,
@@ -82,16 +82,17 @@ print("=== Ion-Implanted Cantilever Design ===")
 print("Based on Park et al. JMEMS 2010 (optimized for C. elegans force sensing)")
 print()
 
-# Expected values from Table III of Part II paper
-# Note: Paper reports ranges due to process variation and multiple designs
+# Expected values from Table III of Part II paper (Target column)
 paper = {
     "stiffness_mN_m": 50,  # mN/m (target constraint)
     "freq_kHz": 2.5,  # kHz (target constraint)
-    "sheet_resistance_ohm_sq": (500, 700),  # Ohm/sq range
-    "beta_star": 0.50,  # efficiency factor
+    "resistance_ohm": 500,  # Total piezoresistor resistance (Ohm)
+    "beta_star": 0.49,  # efficiency factor
     "power_mW": 2.0,  # mW (constrained by self-heating)
-    "force_resolution_pN": (68, 72),  # pN range
-    "junction_depth_um": 0.25,  # ~250 nm from Fig 6
+    "force_resolution_pN": 68.1,  # Theoretical F_min (pN)
+    "junction_depth_um": 2.17,  # t_p from TSUPREM4 (um)
+    "sqrt_Dt_um": 0.0374,  # Diffusion length (um)
+    "sensitivity_V_N": 1414,  # S_FV (V/N)
 }
 
 
@@ -135,11 +136,12 @@ if lookup_loaded:
     Xj = c.junction_depth * 1e6  # um
     resistance = c.resistance()
     power = c.power_dissipation() * 1e3  # mW
+    sqrt_Dt = c.diffusion_length * 1e4  # um
 
-    print_row("Sheet resistance (Ohm/sq)", f"{Rs:.1f}", paper["sheet_resistance_ohm_sq"])
-    print_row("Beta* (efficiency)", f"{beta:.3f}", paper["beta_star"])
-    print_row("Junction depth (um)", f"{Xj:.3f}", paper["junction_depth_um"], tol=0.3)
-    print(f"  {'Total resistance (Ohm)':<28} {resistance:>12.0f} {'-':>12} {'-':>6}")
+    print_row("Junction depth t_p (um)", f"{Xj:.2f}", paper["junction_depth_um"], tol=0.25)
+    print_row("Resistance R_piezo (Ohm)", f"{resistance:.0f}", paper["resistance_ohm"], tol=0.25)
+    print_row("Beta* (efficiency)", f"{beta:.2f}", paper["beta_star"])
+    print_row("sqrt(Dt) (um)", f"{sqrt_Dt:.4f}", paper["sqrt_Dt_um"])
     print_row("Power dissipation (mW)", f"{power:.2f}", paper["power_mW"])
 
     # Performance metrics
@@ -147,13 +149,13 @@ if lookup_loaded:
     force_sensitivity = c.force_sensitivity()
     force_res = c.force_resolution() * 1e12  # pN
 
-    print(f"  {'Force sensitivity (V/N)':<28} {force_sensitivity:>12.1f} {'-':>12} {'-':>6}")
+    print_row("Sensitivity S_FV (V/N)", f"{force_sensitivity:.0f}", paper["sensitivity_V_N"])
     print_row("Force resolution (pN)", f"{force_res:.1f}", paper["force_resolution_pN"])
 
     # Additional derived parameters
     print("-" * 62)
     print("  Additional Parameters:")
-    print(f"    Diffusion length sqrt(Dt): {c.diffusion_length * 1e4:.3f} um")
+    print(f"    Sheet resistance: {Rs:.1f} Ohm/sq")
     print(f"    Hooge parameter alpha: {c.alpha():.2e}")
     print(f"    Number of squares: {c.number_of_squares():.1f}")
     print(f"    Piezoresistor width: {c.w_pr() * 1e6:.1f} um")
