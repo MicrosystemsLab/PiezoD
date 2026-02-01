@@ -11,7 +11,7 @@ pip install piezod
 For development:
 
 ```bash
-git clone https://github.com/certus/PiezoD.git
+git clone https://github.com/MicrosystemsLab/PiezoD.git
 cd PiezoD/python
 uv sync
 ```
