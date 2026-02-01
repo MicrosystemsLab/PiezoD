@@ -75,3 +75,6 @@ lookupTableGeneration/simulations/*.str
 *.h5
 *.hdf5
 *.parquet
+
+# Exception: bundled lookup table for piezod package
+!python/src/piezod/data/ionImplantLookupTable.h5
