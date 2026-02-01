@@ -1,0 +1,34 @@
+name: Create Release
+run-name: Release v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 0.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify version matches pyproject.toml
+        run: |
+          TOML_VERSION=$(grep '^version = ' python/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ "$TOML_VERSION" != "${{ inputs.version }}" ]; then
+            echo "Error: Input version (${{ inputs.version }}) doesn't match pyproject.toml ($TOML_VERSION)"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          generate_release_notes: true
