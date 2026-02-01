@@ -10,10 +10,7 @@ This example demonstrates a cantilever optimized for force sensing with
 touch sensation in C. elegans.
 """
 
-from pathlib import Path
-
 import addcopyfighandler  # noqa: F401
-import scipy.io
 
 from piezod import CantileverImplantation
 
@@ -65,17 +62,6 @@ c = CantileverImplantation(
 # Set operating environment
 c.fluid = "air"
 c.number_of_piezoresistors = 4  # Full bridge for temperature compensation
-
-# Load the lookup table for electrical calculations
-lookup_path = Path(__file__).parent.parent.parent / "matlab" / "PiezoD" / "lookupTable.mat"
-if lookup_path.exists():
-    mat_data = scipy.io.loadmat(str(lookup_path), squeeze_me=True)
-    c.load_lookup_table(mat_data)
-    lookup_loaded = True
-else:
-    print(f"Warning: Lookup table not found at {lookup_path}")
-    print("Electrical parameters requiring lookup table will not be available.")
-    lookup_loaded = False
 
 # Print design summary
 print("=== Ion-Implanted Cantilever Design ===")
@@ -129,35 +115,34 @@ freq = c.omega_vacuum_hz() / 1e3  # kHz
 print_row("Stiffness (mN/m)", f"{stiffness:.2f}", paper["stiffness_mN_m"])
 print_row("Resonant freq (kHz)", f"{freq:.2f}", paper["freq_kHz"])
 
-# Electrical properties (require lookup table)
-if lookup_loaded:
-    Rs = c.sheet_resistance()
-    beta = c.beta()
-    Xj = c.junction_depth * 1e6  # um
-    resistance = c.resistance()
-    power = c.power_dissipation() * 1e3  # mW
-    sqrt_Dt = c.diffusion_length * 1e4  # um
+# Electrical properties (from bundled lookup table)
+Rs = c.sheet_resistance()
+beta = c.beta()
+Xj = c.junction_depth * 1e6  # um
+resistance = c.resistance()
+power = c.power_dissipation() * 1e3  # mW
+sqrt_Dt = c.diffusion_length * 1e4  # um
 
-    print_row("Junction depth t_p (um)", f"{Xj:.2f}", paper["junction_depth_um"], tol=0.25)
-    print_row("Resistance R_piezo (Ohm)", f"{resistance:.0f}", paper["resistance_ohm"], tol=0.25)
-    print_row("Beta* (efficiency)", f"{beta:.2f}", paper["beta_star"])
-    print_row("sqrt(Dt) (um)", f"{sqrt_Dt:.4f}", paper["sqrt_Dt_um"])
-    print_row("Power dissipation (mW)", f"{power:.2f}", paper["power_mW"])
+print_row("Junction depth t_p (um)", f"{Xj:.2f}", paper["junction_depth_um"], tol=0.25)
+print_row("Resistance R_piezo (Ohm)", f"{resistance:.0f}", paper["resistance_ohm"], tol=0.25)
+print_row("Beta* (efficiency)", f"{beta:.2f}", paper["beta_star"])
+print_row("sqrt(Dt) (um)", f"{sqrt_Dt:.4f}", paper["sqrt_Dt_um"])
+print_row("Power dissipation (mW)", f"{power:.2f}", paper["power_mW"])
 
-    # Performance metrics
-    print("-" * 62)
-    force_sensitivity = c.force_sensitivity()
-    force_res = c.force_resolution() * 1e12  # pN
+# Performance metrics
+print("-" * 62)
+force_sensitivity = c.force_sensitivity()
+force_res = c.force_resolution() * 1e12  # pN
 
-    print_row("Sensitivity S_FV (V/N)", f"{force_sensitivity:.0f}", paper["sensitivity_V_N"])
-    print_row("Force resolution (pN)", f"{force_res:.1f}", paper["force_resolution_pN"])
+print_row("Sensitivity S_FV (V/N)", f"{force_sensitivity:.0f}", paper["sensitivity_V_N"])
+print_row("Force resolution (pN)", f"{force_res:.1f}", paper["force_resolution_pN"])
 
-    # Additional derived parameters
-    print("-" * 62)
-    print("  Additional Parameters:")
-    print(f"    Sheet resistance: {Rs:.1f} Ohm/sq")
-    print(f"    Hooge parameter alpha: {c.alpha():.2e}")
-    print(f"    Number of squares: {c.number_of_squares():.1f}")
-    print(f"    Piezoresistor width: {c.w_pr() * 1e6:.1f} um")
+# Additional derived parameters
+print("-" * 62)
+print("  Additional Parameters:")
+print(f"    Sheet resistance: {Rs:.1f} Ohm/sq")
+print(f"    Hooge parameter alpha: {c.alpha():.2e}")
+print(f"    Number of squares: {c.number_of_squares():.1f}")
+print(f"    Piezoresistor width: {c.w_pr() * 1e6:.1f} um")
 
 print("=" * 62)

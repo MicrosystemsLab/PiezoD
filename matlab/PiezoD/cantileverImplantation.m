@@ -43,7 +43,7 @@ classdef cantileverImplantation < cantilever
 
       % Load the lookup table
       try
-        data = open('lookupTable.mat');
+        data = open('ionImplantLookupTable.mat');
         self.lookupTableData = data;
       catch
         fprintf('Dopant type: %s\n', self.doping_type);

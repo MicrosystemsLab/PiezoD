@@ -21,11 +21,11 @@ ENV FLXSHOME=/opt/flooxs
 ENV PL_LIBRARY=/usr/share/plplot5.15.0/tcl/
 
 # Build FLOOXS
-WORKDIR /opt/flooxs/src
-RUN mkdir -p release && cd release && cmake .. && make -j$(nproc)
+WORKDIR /opt/flooxs
+RUN cp src/License.pdf . && mkdir -p build && cd build && cmake .. && make -j$(nproc)
 
 # Create working directory for simulations
 WORKDIR /work
 
 # The built executable
-ENTRYPOINT ["/opt/flooxs/src/release/flooxs"]
+ENTRYPOINT ["/opt/flooxs/build/flooxs"]

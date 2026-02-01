@@ -14,7 +14,7 @@ PiezoD/
 │   │   ├── cantileverImplantation.m
 │   │   ├── cantileverPiezoelectric.m
 │   │   ├── cantileverPoly.m
-│   │   ├── lookupTable.mat      # Precomputed data
+│   │   ├── ionImplantLookupTable.mat  # Ion implant lookup data
 │   │   └── sensorSimulation.mdl # Simulink model
 │   └── sampleCode.m             # Usage example
 ├── python/                      # Python port (in progress)
@@ -24,8 +24,10 @@ PiezoD/
 │   │   ├── cantilever_epitaxy.py
 │   │   ├── cantilever_implantation.py
 │   │   ├── cantilever_piezoelectric.py
-│   │   └── cantilever_poly.py
-│   ├── tests/                   # Test suite (empty)
+│   │   ├── cantilever_poly.py
+│   │   └── data/                # Bundled data files
+│   │       └── ionImplantLookupTable.h5
+│   ├── tests/                   # Test suite
 │   ├── examples/                # Usage examples
 │   └── archive/                 # Legacy/experimental scripts
 ├── lookupTableGeneration/       # FLOOXS TCAD simulation (Docker)
@@ -34,7 +36,7 @@ PiezoD/
 │   ├── templates/               # FLOOXS simulation templates
 │   ├── simulations/             # Input/output directory
 │   ├── legacy/                  # TSUPREM-4 reference files
-│   └── lookupTable.mat          # Generated data
+│   └── lookupTable.mat          # Generated source data
 ├── Docs/                        # Website (jemdoc)
 │   ├── html/                    # Generated HTML
 │   └── cgi-bin/                 # Download scripts

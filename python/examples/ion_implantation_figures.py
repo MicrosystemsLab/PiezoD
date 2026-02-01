@@ -9,13 +9,13 @@ from pathlib import Path
 import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.io
+
+from piezod.cantilever_implantation import _load_lookup_table
 
 plt.style.use("piezod.default")
 
-# Load lookup table
-lookup_path = Path(__file__).parent.parent.parent / "matlab" / "PiezoD" / "lookupTable.mat"
-mat_data = scipy.io.loadmat(str(lookup_path), squeeze_me=True)
+# Load bundled lookup table
+mat_data = _load_lookup_table()
 
 # Available parameter ranges from lookup table
 DOSES = mat_data["ImplantDoses"]  # [2e14, 2e15, 2e16]

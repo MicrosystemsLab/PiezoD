@@ -27,6 +27,7 @@ dependencies = [
     "scipy>=1.7.0",
     "matplotlib>=3.4.0",
     "addcopyfighandler>=2.0.0",
+    "h5py>=3.0.0",
 ]
 
 [project.optional-dependencies]

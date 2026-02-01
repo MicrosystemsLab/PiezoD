@@ -37,7 +37,8 @@ class TestCantileverImplantationInitialization:
         assert cantilever.annealing_type == "inert"
         assert cantilever.annealing_temp == 1173
         assert cantilever.annealing_time == 3600
-        assert cantilever.lookupTableData is None
+        # Lookup table is auto-loaded
+        assert cantilever._lookup_data is not None
 
     def test_initialization_oxide(self, basic_params):
         """Test initialization with oxide annealing."""
@@ -535,78 +536,13 @@ class TestRandomInitialConditions:
         assert not np.allclose(x1, x2)
 
 
-class TestLookupTableMethods:
-    """Test methods that require lookup table."""
+class TestLookupTableInterpolation:
+    """Test methods that use lookup table interpolation with bundled data."""
 
     @pytest.fixture
     def cantilever(self):
-        """Create a test cantilever without lookup table."""
+        """Create cantilever (lookup table auto-loaded)."""
         return CantileverImplantation(
-            freq_min=1e3,
-            freq_max=1e6,
-            l=100e-6,
-            w=20e-6,
-            t=2e-6,
-            l_pr_ratio=0.5,
-            v_bridge=5.0,
-            doping_type="boron",
-            annealing_time=3600,
-            annealing_temp=1173,
-            annealing_type="inert",
-            implantation_energy=50,
-            implantation_dose=1e15,
-        )
-
-    def test_junction_depth_without_table(self, cantilever):
-        """Test junction_depth raises error without lookup table."""
-        with pytest.raises(RuntimeError, match="Lookup table not loaded"):
-            _ = cantilever.junction_depth
-
-    def test_sheet_resistance_without_table(self, cantilever):
-        """Test sheet_resistance raises error without lookup table."""
-        with pytest.raises(RuntimeError, match="Lookup table not loaded"):
-            cantilever.sheet_resistance()
-
-    def test_Nz_without_table(self, cantilever):
-        """Test Nz raises error without lookup table."""
-        with pytest.raises(RuntimeError, match="Lookup table not loaded"):
-            cantilever.Nz()
-
-    def test_beta_without_table(self, cantilever):
-        """Test beta raises error without lookup table."""
-        with pytest.raises(RuntimeError, match="Lookup table not loaded"):
-            cantilever.beta()
-
-    def test_doping_profile_without_table(self, cantilever):
-        """Test doping_profile raises error without lookup table."""
-        with pytest.raises(RuntimeError, match="Lookup table not loaded"):
-            cantilever.doping_profile()
-
-    def test_load_lookup_table(self, cantilever):
-        """Test loading lookup table data."""
-        # Create minimal mock lookup table
-        mock_data = {
-            "z": np.linspace(0, 5, 500),  # microns
-            "ImplantDopants": np.array([1, 2, 3]),
-            "ImplantDoses": np.array([2e14, 1e15, 2e16]),
-            "ImplantEnergies": np.array([20, 50, 80]),
-            "AnnealTemps": np.array([900, 1000, 1100]),
-            "AnnealTimes": np.array([15, 60, 120]),
-            "AnnealOxidation": np.array([1, 2]),
-        }
-
-        cantilever.load_lookup_table(mock_data)
-        assert cantilever.lookupTableData is not None
-        assert cantilever.lookupTableData == mock_data
-
-
-class TestLookupTableInterpolation:
-    """Test methods that use lookup table interpolation with mock data."""
-
-    @pytest.fixture
-    def cantilever_with_table(self):
-        """Create cantilever with mock lookup table."""
-        cantilever = CantileverImplantation(
             freq_min=1e3,
             freq_max=1e6,
             l=100e-6,
@@ -622,68 +558,40 @@ class TestLookupTableInterpolation:
             implantation_dose=1e15,
         )
 
-        # Create comprehensive mock lookup table
-        # Grid dimensions: [dopant, dose, energy, temp, time, oxidation]
-        dopants = np.array([1, 2, 3])  # B, P, As
-        doses = np.array([2e14, 1e15, 2e16])
-        energies = np.array([20, 50, 80])
-        temps = np.array([900, 1000, 1100])
-        times = np.array([15, 60, 120])
-        oxidations = np.array([1, 2])
+    def test_lookup_data_loaded(self, cantilever):
+        """Test lookup data is automatically loaded."""
+        assert cantilever._lookup_data is not None
+        assert "z" in cantilever._lookup_data
+        assert "ImplantDopants" in cantilever._lookup_data
+        assert "n" in cantilever._lookup_data
 
-        # Create meshgrid for 6D interpolation
-        shape = (len(dopants), len(doses), len(energies), len(temps), len(times), len(oxidations))
-
-        # Create mock data with reasonable values
-        mock_data = {
-            "z": np.linspace(0, 5, 500),  # depth in microns
-            "ImplantDopants": dopants,
-            "ImplantDoses": doses,
-            "ImplantEnergies": energies,
-            "AnnealTemps": temps,
-            "AnnealTimes": times,
-            "AnnealOxidation": oxidations,
-            "Xj": np.random.uniform(0.1e-6, 1e-6, shape),  # junction depth in m
-            "Rs": np.random.uniform(10, 1000, shape),  # sheet resistance
-            "Nz": np.random.uniform(1e15, 1e20, shape),  # effective doping
-            "Beta1": np.random.uniform(1e-10, 1e-11, shape),  # piezoresistive coeff
-            "Beta2": np.random.uniform(1e-15, 1e-16, shape),  # piezoresistive coeff
-        }
-
-        # Create 7D array for doping profile (z, dopant, dose, energy, temp, time, oxidation)
-        shape_7d = (len(mock_data["z"]),) + shape
-        mock_data["n"] = np.random.uniform(1e15, 1e20, shape_7d)
-
-        cantilever.load_lookup_table(mock_data)
-        return cantilever
-
-    def test_junction_depth_with_table(self, cantilever_with_table):
-        """Test junction_depth property with lookup table."""
-        Xj = cantilever_with_table.junction_depth
+    def test_junction_depth(self, cantilever):
+        """Test junction_depth property."""
+        Xj = cantilever.junction_depth
         assert isinstance(Xj, (float, np.floating))
         assert Xj > 0
         assert Xj < 10e-6  # Reasonable range for junction depth
 
-    def test_sheet_resistance_with_table(self, cantilever_with_table):
-        """Test sheet_resistance with lookup table."""
-        Rs = cantilever_with_table.sheet_resistance()
+    def test_sheet_resistance(self, cantilever):
+        """Test sheet_resistance method."""
+        Rs = cantilever.sheet_resistance()
         assert isinstance(Rs, (float, np.floating))
         assert Rs > 0
 
-    def test_Nz_with_table(self, cantilever_with_table):
-        """Test Nz with lookup table."""
-        Nz = cantilever_with_table.Nz()
+    def test_Nz(self, cantilever):
+        """Test Nz method."""
+        Nz = cantilever.Nz()
         assert isinstance(Nz, (float, np.floating))
         assert Nz > 0
 
-    def test_beta_with_table(self, cantilever_with_table):
-        """Test beta calculation with lookup table."""
-        beta = cantilever_with_table.beta()
+    def test_beta(self, cantilever):
+        """Test beta calculation."""
+        beta = cantilever.beta()
         assert isinstance(beta, (float, np.floating))
 
-    def test_doping_profile_with_table(self, cantilever_with_table):
-        """Test doping_profile with lookup table."""
-        x, active, total = cantilever_with_table.doping_profile()
+    def test_doping_profile(self, cantilever):
+        """Test doping_profile method."""
+        x, active, total = cantilever.doping_profile()
 
         # Check return types
         assert isinstance(x, np.ndarray)
@@ -696,16 +604,16 @@ class TestLookupTableInterpolation:
 
         # Check values are reasonable
         assert np.all(x >= 0)
-        assert np.all(x <= cantilever_with_table.t)
+        assert np.all(x <= cantilever.t)
         assert np.all(active > 0)
         assert np.all(total > 0)
 
-    def test_doping_profile_truncated_at_thickness(self, cantilever_with_table):
+    def test_doping_profile_truncated_at_thickness(self, cantilever):
         """Test doping profile is truncated at device thickness."""
-        x, active, total = cantilever_with_table.doping_profile()
+        x, active, total = cantilever.doping_profile()
 
         # All x values should be <= thickness
-        assert np.all(x <= cantilever_with_table.t)
+        assert np.all(x <= cantilever.t)
 
 
 class TestInheritance:
