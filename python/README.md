@@ -42,7 +42,7 @@ uv run pytest
 Lint and format:
 
 ```bash
-uvx ruff check src tests --fix --extend-select I,B,SIM,C4,ISC,PIE && uvx ruff format src tests
+uvx ruff check src tests --fix && uvx ruff format src tests
 ```
 
 Type check:

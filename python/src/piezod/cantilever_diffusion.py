@@ -5,5 +5,3 @@ from piezod.cantilever import Cantilever
 
 class CantileverDiffusion(Cantilever):
     """Cantilever with diffused piezoresistor doping."""
-
-    pass

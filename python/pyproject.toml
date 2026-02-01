@@ -17,14 +17,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Physics",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.20.0",
     "scipy>=1.7.0",
@@ -53,11 +50,15 @@ exclude = [
 sources = ["src"]
 
 [tool.ruff]
-line-length = 100
-target-version = "py38"
+line-length = 120
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "SIM", "C4", "ISC", "PIE"]
+ignore = [
+    "E741",   # Allow I, l, O as variable names (physics notation)
+    "SIM108", # Allow if/else blocks instead of ternary (more readable with comments)
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
