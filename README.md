@@ -30,7 +30,7 @@ Future development will focus on the Python version.
 - fluid damping: resonant frequency and quality factor
 - temperature profile: finite difference, lumped, and linearized circuit models for self-heating
 
-### Constraints
+### Design optimization constraints
 - simple bounds: all design parameters, e.g. cantilever length, bias voltage
 - general nonlinear constraints: power dissipation, temperature, resonant frequency, resistance, spring constant, etc
 
