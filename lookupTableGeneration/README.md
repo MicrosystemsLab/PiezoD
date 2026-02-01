@@ -4,16 +4,24 @@ Generate dopant profile lookup tables for PiezoD using FLOOXS TCAD process simul
 
 ## Prerequisites
 
-- Docker (with Compose)
-- FLOOXS source code (free for academic/research use, requires registration)
+### Docker
+
+Install Docker Desktop: https://www.docker.com/products/docker-desktop/
+
+Free for personal and educational use.
+
+### FLOOXS
+
+FLOOXS is free for academic/research use but requires registration.
 
 Request access: http://www.flooxs.ece.ufl.edu/index.php/Download
 
 ## Setup
 
-1. Download FLOOXS source code after registration
-2. Extract to `FLOOXS_2026/` in this folder (gitignored, not committed)
-3. Build the Docker image (one time):
+1. Install Docker Desktop and verify it's running
+2. Download FLOOXS source code after registration
+3. Extract to `FLOOXS_2026/` in this folder (gitignored, not committed)
+4. Build the Docker image (one time):
 
 ```bash
 docker compose build
