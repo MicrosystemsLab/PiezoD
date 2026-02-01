@@ -86,7 +86,9 @@ Display this exact format and ask for confirmation:
 6. Push to origin/master
 7. Trigger GitHub Action "Create Release"
 8. Wait for release workflow to complete
-9. Wait for publish workflow to complete (PyPI)
+9. Update GitHub release with release notes
+10. Trigger publish workflow manually (GITHUB_TOKEN can't trigger other workflows)
+11. Wait for publish workflow to complete (PyPI)
 
 Proceed with release?
 ```
@@ -139,7 +141,21 @@ gh run list --workflow=release.yml --limit 1 --json status,conclusion,databaseId
 ```
 Poll every 10 seconds until status is "completed". Abort if conclusion is not "success".
 
-#### Step 9: Wait for publish workflow
+#### Step 9: Update GitHub release with release notes
+```bash
+gh release edit v{VERSION} --notes "## What's Changed
+
+{RELEASE_NOTES_BULLETS}"
+```
+Use the release notes generated in Phase 1.
+
+#### Step 10: Trigger publish workflow
+The release workflow uses GITHUB_TOKEN which cannot trigger other workflows. Manually trigger:
+```bash
+gh workflow run publish.yml -f version={VERSION}
+```
+
+#### Step 11: Wait for publish workflow
 ```bash
 gh run list --workflow=publish.yml --limit 1 --json status,conclusion,databaseId
 ```
