@@ -13,6 +13,8 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.style.use("piezod")
+
 from piezod import CantileverPoly, Material
 
 # =============================================================================
@@ -161,27 +163,25 @@ thermo_psd = c_poly.thermo_PSD(freq)
 amp_psd = c_poly.amplifier_PSD(freq)
 total_psd = johnson_psd + hooge_psd + thermo_psd + amp_psd
 
-ax.loglog(freq, np.sqrt(johnson_psd) * 1e9, "b-", linewidth=2, label="Johnson")
-ax.loglog(freq, np.sqrt(hooge_psd) * 1e9, "r-", linewidth=2, label="1/f (Hooge)")
-ax.loglog(freq, np.sqrt(thermo_psd) * 1e9, "g-", linewidth=2, label="Thermomechanical")
-ax.loglog(freq, np.sqrt(amp_psd) * 1e9, "m-", linewidth=2, label="Amplifier")
-ax.loglog(freq, np.sqrt(total_psd) * 1e9, "k--", linewidth=2, label="Total")
+ax.loglog(freq, np.sqrt(johnson_psd) * 1e9, "b-", label="Johnson")
+ax.loglog(freq, np.sqrt(hooge_psd) * 1e9, "r-", label="1/f (Hooge)")
+ax.loglog(freq, np.sqrt(thermo_psd) * 1e9, "g-", label="Thermomechanical")
+ax.loglog(freq, np.sqrt(amp_psd) * 1e9, "m-", label="Amplifier")
+ax.loglog(freq, np.sqrt(total_psd) * 1e9, "k--", label="Total")
 
 ax.axvline(x=c_poly.knee_frequency(), color="gray", linestyle=":", alpha=0.7)
 ax.text(
     c_poly.knee_frequency() * 1.1,
     np.sqrt(johnson_psd[0]) * 1e9 * 0.5,
     f"Knee: {c_poly.knee_frequency():.0f} Hz",
-    fontsize=10,
 )
 
-ax.set_xlabel("Frequency (Hz)", fontsize=12)
-ax.set_ylabel("Voltage Noise (nV/sqrt(Hz))", fontsize=12)
-ax.set_title("Poly-Si Cantilever Noise Spectrum", fontsize=14)
+ax.set_xlabel("Frequency (Hz)")
+ax.set_ylabel("Voltage Noise (nV/sqrt(Hz))")
+ax.set_title("Poly-Si Cantilever Noise Spectrum")
 ax.legend(loc="upper right")
-ax.grid(True, alpha=0.3)
 ax.set_xlim([1, 1000])
 
 plt.tight_layout()
-plt.savefig("poly_cantilever_noise.png", dpi=150)
+plt.savefig("poly_cantilever_noise.png")
 print("Saved noise spectrum to: poly_cantilever_noise.png")

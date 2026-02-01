@@ -17,6 +17,8 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.style.use("piezod")
+
 from piezod import CantileverPiezoelectric, FluidType, PiezoMaterial
 
 # =============================================================================
@@ -144,52 +146,48 @@ ax1 = axes[0, 0]
 v_sens_aln = c_aln.v_f_sensitivity(freq)
 c_pzt.fluid = FluidType.AIR
 v_sens_pzt = c_pzt.v_f_sensitivity(freq)
-ax1.loglog(freq, v_sens_aln, "b-", linewidth=2, label="AlN")
-ax1.loglog(freq, v_sens_pzt, "r-", linewidth=2, label="PZT")
+ax1.loglog(freq, v_sens_aln, "b-", label="AlN")
+ax1.loglog(freq, v_sens_pzt, "r-", label="PZT")
 ax1.set_xlabel("Frequency (Hz)")
 ax1.set_ylabel("Voltage Sensitivity (V/N)")
 ax1.set_title("Voltage Mode Force Sensitivity")
 ax1.legend()
-ax1.grid(True, alpha=0.3)
 
 # Plot 2: Voltage noise comparison
 ax2 = axes[0, 1]
 Vn_aln = c_aln.Vn(freq)
 Vn_pzt = c_pzt.Vn(freq)
-ax2.loglog(freq, Vn_aln * 1e9, "b-", linewidth=2, label="AlN")
-ax2.loglog(freq, Vn_pzt * 1e9, "r-", linewidth=2, label="PZT")
+ax2.loglog(freq, Vn_aln * 1e9, "b-", label="AlN")
+ax2.loglog(freq, Vn_pzt * 1e9, "r-", label="PZT")
 ax2.set_xlabel("Frequency (Hz)")
 ax2.set_ylabel("Voltage Noise (nV/sqrt(Hz))")
 ax2.set_title("Voltage Mode Noise")
 ax2.legend()
-ax2.grid(True, alpha=0.3)
 
 # Plot 3: Force noise density (voltage mode)
 ax3 = axes[1, 0]
 Sfminv_aln = c_aln.Sfminv(freq)
 Sfminv_pzt = c_pzt.Sfminv(freq)
-ax3.loglog(freq, Sfminv_aln * 1e12, "b-", linewidth=2, label="AlN")
-ax3.loglog(freq, Sfminv_pzt * 1e12, "r-", linewidth=2, label="PZT")
+ax3.loglog(freq, Sfminv_aln * 1e12, "b-", label="AlN")
+ax3.loglog(freq, Sfminv_pzt * 1e12, "r-", label="PZT")
 ax3.set_xlabel("Frequency (Hz)")
 ax3.set_ylabel("Force Noise (pN/sqrt(Hz))")
 ax3.set_title("Force Noise Density (Voltage Mode)")
 ax3.legend()
-ax3.grid(True, alpha=0.3)
 
 # Plot 4: Force noise density (charge mode)
 ax4 = axes[1, 1]
 Sfminq_aln = c_aln.Sfminq(freq)
 Sfminq_pzt = c_pzt.Sfminq(freq)
-ax4.loglog(freq, Sfminq_aln * 1e12, "b-", linewidth=2, label="AlN")
-ax4.loglog(freq, Sfminq_pzt * 1e12, "r-", linewidth=2, label="PZT")
+ax4.loglog(freq, Sfminq_aln * 1e12, "b-", label="AlN")
+ax4.loglog(freq, Sfminq_pzt * 1e12, "r-", label="PZT")
 ax4.set_xlabel("Frequency (Hz)")
 ax4.set_ylabel("Force Noise (pN/sqrt(Hz))")
 ax4.set_title("Force Noise Density (Charge Mode)")
 ax4.legend()
-ax4.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig("piezoelectric_cantilever_comparison.png", dpi=150)
+plt.savefig("piezoelectric_cantilever_comparison.png")
 print("Saved comparison plot to: piezoelectric_cantilever_comparison.png")
 
 # =============================================================================
