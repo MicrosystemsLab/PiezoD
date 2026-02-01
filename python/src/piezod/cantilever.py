@@ -653,8 +653,8 @@ class Cantilever:
         Udx_elastic[tip_indices] = 0.5 * moment[tip_indices] ** 2 * dx / EI_tip
         Udx_kinetic[tip_indices] = 0.5 * (omega * deflection[tip_indices]) ** 2 * dx * dm_tip
 
-        U_elastic = np.trapz(x, Udx_elastic)
-        U_kinetic = np.trapz(x, Udx_kinetic)
+        U_elastic = np.trapezoid(x, Udx_elastic)
+        U_kinetic = np.trapezoid(x, Udx_kinetic)
         return U_elastic, U_kinetic
 
     # Methods
@@ -679,6 +679,7 @@ class Cantilever:
         self.amplifier = "INA103"
         self.R_contact = 100
         self.tip_mass = 0
+        self.rms_actuator_displacement_noise = 1e-12  # Displacement noise from mounting (m)
 
         self.cantilever_type = "none"
         self.l_a = 0
@@ -909,7 +910,7 @@ class Cantilever:
 
         # TODO
         mu_z_x, sigma_z_x = self.mobility(n_z_x, T_z_x + self.T)
-        Rsheet_x = 1 / np.trapz(z * 1e2, sigma_z_x)  # Convert z from m to cm
+        Rsheet_x = 1 / np.trapezoid(z * 1e2, sigma_z_x)  # Convert z from m to cm
         return Rsheet_x
 
     # The number of current carriers in the piezoresistor (-)
@@ -1164,8 +1165,8 @@ class Cantilever:
         mu, sigma = self.mobility(active_doping, TPR)
 
         P = self.piezoresistance_factor(active_doping)
-        numerator = np.trapz(z, sigma * P * z)
-        denominator = np.trapz(z, sigma)
+        numerator = np.trapezoid(z, sigma * P * z)
+        denominator = np.trapezoid(z, sigma)
         beta = 2 * numerator / (self.t * 1e2 * denominator)  # t: m -> cm
         return max(beta, 1e-6)  # For optimization, ensure that beta doesn't become negative
 
@@ -1465,7 +1466,7 @@ class Cantilever:
             # so is best used for modeling
             index_range = np.nonzero(x <= self.l_pr())
             R_x = 2 * Rsheet_x[index_range] / self.w_pr()
-            R_calc = 2 * np.trapz(x[index_range], Rsheet_x(index_range) / self.w_pr())
+            R_calc = 2 * np.trapezoid(x[index_range], Rsheet_x(index_range) / self.w_pr())
             I_calc = (self.v_bridge / 2) / R_calc
             Qgen_x = I_calc**2 * R_x
         else:
@@ -1633,7 +1634,7 @@ class Cantilever:
             x_resistor = x[pr_indices]
             Rsheet_resistor = Rsheet_x[pr_indices]
             R_calc = (
-                2 * np.trapz(x_resistor, Rsheet_resistor / self.w_pr()) + 3.4 * Rsheet_resistor[-1] + 2 * self.R_contact
+                2 * np.trapezoid(x_resistor, Rsheet_resistor / self.w_pr()) + 3.4 * Rsheet_resistor[-1] + 2 * self.R_contact
             )
             Rsheet_x = Rsheet_x * (R_nominal / R_calc)
 
@@ -2042,7 +2043,7 @@ class Cantilever:
         strain = dopant_concentration * delta
         stress = strain * E
 
-        ybar = np.trapz(y, y * stress.transpose()) / np.trapz(y, stress.transpose())
+        ybar = np.trapezoid(y, y * stress.transpose()) / np.trapezoid(y, stress.transpose())
         h1 = thickness - ybar
         h2 = ybar
 
@@ -2053,11 +2054,11 @@ class Cantilever:
         stress1 = stress[i1]
         stress2 = stress[i2]
 
-        sigma1 = 1 / h1 * np.trapz(y1, stress1)
-        sigma2 = 1 / h2 * np.trapz(y2, stress2)
+        sigma1 = 1 / h1 * np.trapezoid(y1, stress1)
+        sigma2 = 1 / h2 * np.trapezoid(y2, stress2)
 
-        ybar1 = np.trapz(y1, y1 * stress1.transpose()) / np.trapz(y1, stress1.transpose())
-        ybar2 = np.trapz(y2, y2 * stress2.transpose()) / np.trapz(y2, stress2.transpose())
+        ybar1 = np.trapezoid(y1, y1 * stress1.transpose()) / np.trapezoid(y1, stress1.transpose())
+        ybar2 = np.trapezoid(y2, y2 * stress2.transpose()) / np.trapezoid(y2, stress2.transpose())
 
         I1 = width * h1**3 / 12
         I2 = width * h2**3 / 12

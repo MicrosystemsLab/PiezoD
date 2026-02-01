@@ -47,3 +47,20 @@ $RECYCLE.BIN/
 
 # Mac crap
 .DS_Store
+
+# Binary/generated files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
+*.mat
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.parquet
