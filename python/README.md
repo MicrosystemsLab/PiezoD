@@ -69,7 +69,7 @@ uvx ty check src
 
 ## Documentation
 
-See the main project documentation at [microsystems.stanford.edu/piezod](http://microsystems.stanford.edu/piezod).
+See the main project documentation at [github.com/MicrosystemsLab/PiezoD](https://github.com/MicrosystemsLab/PiezoD).
 
 ## Citation
 

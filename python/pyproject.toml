@@ -38,7 +38,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "http://microsystems.stanford.edu/piezod"
+Homepage = "https://github.com/MicrosystemsLab/PiezoD"
 Repository = "https://github.com/MicrosystemsLab/PiezoD"
 
 [tool.hatch.build.targets.sdist]
