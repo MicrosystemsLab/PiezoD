@@ -1,10 +1,12 @@
 name: Publish to PyPI
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag to publish (e.g., v0.2.0)'
+        description: 'Version tag (e.g., v0.8.0 or 0.8.0)'
         required: true
         type: string
 
@@ -15,19 +17,34 @@ jobs:
     permissions:
       id-token: write
     steps:
+      - name: Normalize version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.version }}"
+          fi
+          # Ensure tag has v prefix
+          TAG_VERSION="${TAG#v}"
+          TAG_VERSION="v${TAG_VERSION}"
+          # Bare version for pyproject.toml comparison
+          BARE_VERSION="${TAG_VERSION#v}"
+          echo "tag=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "bare=${BARE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${TAG_VERSION} (${BARE_VERSION})"
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.version }}
+          ref: ${{ steps.version.outputs.tag }}
 
       - uses: astral-sh/setup-uv@v4
 
       - name: Verify version matches pyproject.toml
         run: |
           TOML_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          INPUT_VERSION="${{ inputs.version }}"
-          INPUT_VERSION="${INPUT_VERSION#v}"
-          if [ "$TOML_VERSION" != "$INPUT_VERSION" ]; then
-            echo "Error: Input version ($INPUT_VERSION) doesn't match pyproject.toml ($TOML_VERSION)"
+          if [ "$TOML_VERSION" != "${{ steps.version.outputs.bare }}" ]; then
+            echo "Error: Tag version (${{ steps.version.outputs.bare }}) doesn't match pyproject.toml ($TOML_VERSION)"
             exit 1
           fi
         working-directory: python
