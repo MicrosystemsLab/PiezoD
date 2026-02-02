@@ -1,8 +1,84 @@
 import math
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import integrate, interpolate, optimize
+
+
+@dataclass
+class GapConfig:
+    """Configuration for gap geometry (piezoresistor or beam).
+
+    The gap defines a reduction in effective width near the cantilever root.
+    This generalizes the "air gap" concept for U-shaped piezoresistors and
+    can also be used for cantilever beam geometry (e.g., tuning-fork designs).
+
+    The effective width at position x is:
+        - For 0 <= x <= gap_extent: w_nominal - gap_width
+        - For x > gap_extent: w_nominal (full width)
+
+    Attributes:
+        gap_width: Absolute gap width reduction (m). If zero, gap_fraction is used.
+        gap_fraction: Gap as fraction of nominal width (-). Only used if gap_width is 0.
+        gap_extent: Length from root where gap applies (m). If None, uses full
+            reference length (e.g., piezoresistor length or cantilever length).
+    """
+
+    gap_width: float = 0.0  # Absolute gap width (m)
+    gap_fraction: float = 0.0  # Fractional gap (0-1)
+    gap_extent: float | None = None  # Length from root where gap applies (m)
+
+    def get_gap_width(self, nominal_width: float) -> float:
+        """Calculate the actual gap width.
+
+        Args:
+            nominal_width: The nominal (full) width (m)
+
+        Returns:
+            The gap width reduction (m)
+        """
+        if self.gap_width > 0:
+            return self.gap_width
+        return self.gap_fraction * nominal_width
+
+    def effective_width(self, x: float, reference_length: float, nominal_width: float) -> float:
+        """Calculate effective width at position x.
+
+        The gap reduction applies from the root (x=0) up to gap_extent.
+        Beyond gap_extent, the full nominal width is used.
+
+        Args:
+            x: Position along cantilever from root (m)
+            reference_length: Reference length for gap extent default (m)
+            nominal_width: Nominal (unreduced) width (m)
+
+        Returns:
+            Effective width at position x (m)
+        """
+        extent = self.gap_extent if self.gap_extent is not None else reference_length
+        gap_w = self.get_gap_width(nominal_width)
+
+        if x <= extent:
+            return nominal_width - gap_w
+        return nominal_width
+
+    def effective_width_array(self, x: np.ndarray, reference_length: float, nominal_width: float) -> np.ndarray:
+        """Calculate effective width at each position in array x.
+
+        Args:
+            x: Array of positions along cantilever from root (m)
+            reference_length: Reference length for gap extent default (m)
+            nominal_width: Nominal (unreduced) width (m)
+
+        Returns:
+            Array of effective widths at each position (m)
+        """
+        extent = self.gap_extent if self.gap_extent is not None else reference_length
+        gap_w = self.get_gap_width(nominal_width)
+
+        w_eff = np.where(x <= extent, nominal_width - gap_w, nominal_width)
+        return w_eff
 
 
 class Cantilever:
@@ -601,9 +677,17 @@ class Cantilever:
         Udx_elastic = np.zeros((self.numXPoints, 1))
         Udx_kinetic = np.zeros((self.numXPoints, 1))
 
+        # Calculate effective beam width profile (for beam gap handling)
+        # x coordinates in tip region are relative to start of l_a
+        x_tip_relative = x[tip_indices] - self.l_a if self.l_a > 0 else x[tip_indices]
+        w_eff_tip = self.effective_beam_width_array(x_tip_relative.flatten())
+
         # Define the multilayer mechanics
         EI_base = 1 / self.calculateActuatorNormalizedCurvature()
-        EI_tip = self.modulus() * self.w * self.t**3 / 12
+        # Use average effective width for the simple EI_tip estimate
+        # (the detailed calculation below uses spatially varying EI)
+        w_avg_tip = np.mean(w_eff_tip) if len(w_eff_tip) > 0 else self.w
+        EI_tip_avg = self.modulus() * w_avg_tip * self.t**3 / 12
 
         # Empirical correction factors that give better agreement with FEA results
         # Account for cases where t_a >> t, w_a >> w, l_a >> l
@@ -615,7 +699,7 @@ class Cantilever:
         # point load force at the tip of the beam. Stitch together the two
         # sections (the moment is constant despite the EI discontinuity)
         tip_deflection = 1e-6  # Apply a test force
-        F = tip_deflection * 3 * EI_tip / self.l**3
+        F = tip_deflection * 3 * EI_tip_avg / self.l**3
         moment = F * (totalLength - x)
         deflection[base_indices] = -F * x[base_indices] ** 2 * (3 * totalLength - x[base_indices]) / (6 * EI_base)
 
@@ -630,12 +714,15 @@ class Cantilever:
 
         deflection[tip_indices] = (
             deflection[max(base_indices)]
-            - F * x_relative**2 * (3 * self.l - x_relative) / (6 * EI_tip)
+            - F * x_relative**2 * (3 * self.l - x_relative) / (6 * EI_tip_avg)
             + tip_slope * x_relative
         )
 
         E_metal, rho_metal, k_metal, alpha_metal = self.lookup_metal_properties()
-        dm_tip = self.w * self.t * self.rho_si
+
+        # Spatially varying EI and mass for tip region (beam gap support)
+        EI_tip = self.modulus() * w_eff_tip * self.t**3 / 12
+        dm_tip = w_eff_tip * self.t * self.rho_si
 
         if self.cantilever_type in ("step", "thermal"):
             dm_base = self.w_a * (self.t * self.rho_si + self.t_oxide * self.rho_sio2 + self.t_a * rho_metal)
@@ -650,8 +737,13 @@ class Cantilever:
         # Piecewise kinetic and elastic energies
         Udx_elastic[base_indices] = 0.5 * moment[base_indices] ** 2 * dx / EI_base
         Udx_kinetic[base_indices] = 0.5 * (omega * deflection[base_indices]) ** 2 * dx * dm_base
-        Udx_elastic[tip_indices] = 0.5 * moment[tip_indices] ** 2 * dx / EI_tip
-        Udx_kinetic[tip_indices] = 0.5 * (omega * deflection[tip_indices]) ** 2 * dx * dm_tip
+
+        # Tip region uses spatially varying EI and dm (for beam gap)
+        tip_idx_flat = tip_indices[0]
+        Udx_elastic[tip_idx_flat] = (0.5 * moment[tip_idx_flat] ** 2 * dx / EI_tip).reshape(-1, 1)
+        Udx_kinetic[tip_idx_flat] = (0.5 * (omega * deflection[tip_idx_flat].flatten()) ** 2 * dx * dm_tip).reshape(
+            -1, 1
+        )
 
         U_elastic = np.trapezoid(x, Udx_elastic)
         U_kinetic = np.trapezoid(x, Udx_kinetic)
@@ -668,7 +760,15 @@ class Cantilever:
         self.t = 1e-6
         self.l_pr_ratio = 0.3
         self.v_bridge = 1
-        self.air_gap_width = 2e-6  # The width between the two cantilever legs. Significant if l_pr is small
+
+        # Gap configuration for U-shaped piezoresistor
+        # Default: 2 um gap width applied over entire piezoresistor length (root region)
+        self._gap_config = GapConfig(gap_width=2e-6)
+
+        # Beam gap configuration for cantilever geometry
+        # Used in Rayleigh-Ritz frequency calculation when the beam has a slot/gap
+        # at the root (e.g., tuning fork designs). Default: no beam gap.
+        self._beam_gap_config: GapConfig | None = None
 
         self.fluid = "air"
         self.rho_arb = 1.0  # Arbitrary fluid density (kg/m^3)
@@ -710,6 +810,131 @@ class Cantilever:
 
     def w_pr(self):
         return self.w / 2
+
+    @property
+    def gap_config(self) -> GapConfig:
+        """Get the gap configuration for the piezoresistor."""
+        return self._gap_config
+
+    @gap_config.setter
+    def gap_config(self, config: GapConfig) -> None:
+        """Set the gap configuration for the piezoresistor."""
+        self._gap_config = config
+
+    @property
+    def air_gap_width(self) -> float:
+        """Get the air gap width (backward compatibility).
+
+        This property provides backward compatibility with the old air_gap_width
+        attribute. For new code, use gap_config instead.
+
+        Returns:
+            The gap width in meters.
+        """
+        return self._gap_config.get_gap_width(self.w_pr())
+
+    @air_gap_width.setter
+    def air_gap_width(self, width: float) -> None:
+        """Set the air gap width (backward compatibility).
+
+        This property provides backward compatibility with the old air_gap_width
+        attribute. For new code, use gap_config instead.
+
+        Args:
+            width: The gap width in meters.
+        """
+        self._gap_config = GapConfig(gap_width=width)
+
+    def effective_pr_width_at(self, x: float) -> float:
+        """Calculate effective piezoresistor width at position x.
+
+        The gap reduces the conducting width in the root region of the
+        piezoresistor. This method returns the effective width at any
+        position along the cantilever.
+
+        Args:
+            x: Position along cantilever from root (m)
+
+        Returns:
+            Effective piezoresistor width at position x (m)
+        """
+        return self._gap_config.effective_width(x, self.l_pr(), self.w_pr())
+
+    def gap_extent(self) -> float:
+        """Get the extent of the piezoresistor gap region from the root.
+
+        Returns:
+            Length from root where gap applies (m). Defaults to l_pr if not set.
+        """
+        if self._gap_config.gap_extent is not None:
+            return self._gap_config.gap_extent
+        return self.l_pr()
+
+    @property
+    def beam_gap_config(self) -> GapConfig | None:
+        """Get the beam gap configuration for Rayleigh-Ritz calculations.
+
+        The beam gap reduces the effective cantilever width in the root region,
+        affecting stiffness and resonant frequency calculations. This is used
+        for tuning-fork or slotted cantilever designs.
+
+        Returns:
+            GapConfig for beam geometry, or None if no beam gap is configured.
+        """
+        return self._beam_gap_config
+
+    @beam_gap_config.setter
+    def beam_gap_config(self, config: GapConfig | None) -> None:
+        """Set the beam gap configuration for Rayleigh-Ritz calculations.
+
+        Args:
+            config: GapConfig for beam geometry, or None to disable beam gap.
+        """
+        self._beam_gap_config = config
+
+    def effective_beam_width_at(self, x: float) -> float:
+        """Calculate effective cantilever beam width at position x.
+
+        If a beam gap is configured, the width is reduced in the root region.
+        This affects stiffness, mass, and resonant frequency calculations.
+
+        Args:
+            x: Position along cantilever from root (m)
+
+        Returns:
+            Effective beam width at position x (m)
+        """
+        if self._beam_gap_config is None:
+            return self.w
+        return self._beam_gap_config.effective_width(x, self.l, self.w)
+
+    def effective_beam_width_array(self, x: np.ndarray) -> np.ndarray:
+        """Calculate effective cantilever beam width at each position in array.
+
+        If a beam gap is configured, the width is reduced in the root region.
+        This affects stiffness, mass, and resonant frequency calculations.
+
+        Args:
+            x: Array of positions along cantilever from root (m)
+
+        Returns:
+            Array of effective beam widths at each position (m)
+        """
+        if self._beam_gap_config is None:
+            return np.full_like(x, self.w)
+        return self._beam_gap_config.effective_width_array(x, self.l, self.w)
+
+    def beam_gap_extent(self) -> float:
+        """Get the extent of the beam gap region from the root.
+
+        Returns:
+            Length from root where beam gap applies (m). Returns 0 if no gap.
+        """
+        if self._beam_gap_config is None:
+            return 0.0
+        if self._beam_gap_config.gap_extent is not None:
+            return self._beam_gap_config.gap_extent
+        return self.l
 
     # Determine the ion implantation table index from the dopant type
     # TODO Catch exceptions
@@ -2292,8 +2517,11 @@ class Cantilever:
         # Treating the system as two springs in series is not valid because:
         # 1) the thick base sees a larger moment than in the springs-in-series approach
         # 2) the angle at the end of the thick base is integrated along the remaining length of the cantilever
-        if self.cantilever_type == "none":
+        if self.cantilever_type == "none" and self._beam_gap_config is None:
             stiffness = k_tip
+        elif self.cantilever_type == "none" and self._beam_gap_config is not None:
+            # For beam with gap, calculate stiffness numerically using spatially varying EI
+            stiffness = self._calculate_stiffness_with_beam_gap()
         else:
             F = 1e-9  # Test force (N)
             EI_base = 1 / self.calculateActuatorNormalizedCurvature()
@@ -2310,29 +2538,153 @@ class Cantilever:
             stiffness = F / z_tip
         return stiffness
 
+    def _calculate_stiffness_with_beam_gap(self) -> float:
+        """Calculate stiffness for a cantilever with beam gap using numerical integration.
+
+        For a beam with spatially varying width, we integrate 1/EI(x) along the length
+        to find the tip deflection under a unit load.
+
+        Returns:
+            Spring constant (N/m)
+        """
+        # Discretize the cantilever length
+        n_points = self.numXPoints
+        x = np.linspace(0, self.l, n_points)
+        dx = x[1] - x[0]
+
+        # Get effective width at each position
+        w_eff = self.effective_beam_width_array(x)
+
+        # Calculate EI at each position
+        EI = self.modulus() * w_eff * self.t**3 / 12
+
+        # For a point load F at the tip, M(x) = F * (L - x)
+        # Deflection: z'' = M/EI = F*(L-x)/EI(x)
+        # Integrate twice to get deflection at tip
+        F = 1.0  # Unit force
+
+        # First integration: slope
+        M_over_EI = F * (self.l - x) / EI
+        theta = np.zeros(n_points)
+        for i in range(1, n_points):
+            theta[i] = theta[i - 1] + M_over_EI[i] * dx
+
+        # Second integration: deflection
+        z = np.zeros(n_points)
+        for i in range(1, n_points):
+            z[i] = z[i - 1] + theta[i] * dx
+
+        # Stiffness = F / z_tip
+        z_tip = z[-1]
+        if z_tip > 0:
+            return F / z_tip
+        # Fallback to uniform beam formula
+        return self.modulus() * self.w * self.t**3 / (4 * self.l**3)
+
     # Effective mass of the cantilever beam
     # Does not include the effective mass of the base/actuator section
     # f0 is calculated using Rayleight-Ritz there
     # Units: kg
     def effective_mass(self):
-        cantilever_effective_mass = 0.243 * self.rho_si * self.w * self.t * self.l
+        if self._beam_gap_config is None:
+            cantilever_effective_mass = 0.243 * self.rho_si * self.w * self.t * self.l
+        else:
+            # For beam with gap, calculate effective mass accounting for varying width
+            cantilever_effective_mass = self._calculate_effective_mass_with_beam_gap()
         effective_mass = cantilever_effective_mass + self.tip_mass
         return effective_mass
 
+    def _calculate_effective_mass_with_beam_gap(self) -> float:
+        """Calculate effective mass for a cantilever with beam gap.
+
+        The effective mass accounts for the mode shape distribution.
+        For a simple cantilever, m_eff = 0.243 * m_total.
+        With varying width, we integrate the mass distribution weighted by mode shape.
+
+        Returns:
+            Effective mass (kg)
+        """
+        # Discretize the cantilever length
+        n_points = self.numXPoints
+        x = np.linspace(0, self.l, n_points)
+
+        # Get effective width at each position
+        w_eff = self.effective_beam_width_array(x)
+
+        # Mass per unit length at each position
+        dm_dx = w_eff * self.t * self.rho_si
+
+        # First-mode shape for a cantilever beam (approximate)
+        # phi(x) ~ (x/L)^2 * (3 - x/L) for a point-loaded beam
+        # Normalized so phi(L) = 1
+        xi = x / self.l
+        phi = 1.5 * xi**2 - 0.5 * xi**3
+
+        # Effective mass = integral of dm_dx * phi^2
+        m_eff = np.trapezoid(dm_dx * phi**2, x)
+
+        return m_eff
+
     # Resonant frequency for undamped vibration (first mode).
     # For a simple cantilever, use Bernoulli beam theory.
-    # For step/actuator designs, use Rayleigh-Ritz (i.e. U_kin = U_strain)
+    # For step/actuator designs or beams with gap, use Rayleigh-Ritz (i.e. U_kin = U_strain)
     # The R-R results agree with 2D and 3D FEA results to <3# when
     # (1 < t_a/t < 6, 1/5 < l_a/l < 5)
     # Units: radians/sec
     def omega_vacuum(self):
         omega_bernoulli = math.sqrt(self.stiffness() / self.effective_mass())
 
-        if self.cantilever_type == "none":
+        if self.cantilever_type == "none" and self._beam_gap_config is None:
             omega_vacuum = omega_bernoulli
+        elif self.cantilever_type == "none" and self._beam_gap_config is not None:
+            # For beam with gap but no actuator, use Rayleigh-Ritz
+            omega_vacuum = self._omega_vacuum_with_beam_gap()
         else:
             omega_vacuum = optimize.fminbound(self.findEnergyResidual, 1, 100 * omega_bernoulli, "xtol", 1e-6)
         return omega_vacuum
+
+    def _omega_vacuum_with_beam_gap(self) -> float:
+        """Calculate vacuum resonant frequency for beam with gap using Rayleigh-Ritz.
+
+        For a beam with spatially varying width, we use the Rayleigh-Ritz method
+        to find the fundamental frequency by equating kinetic and potential energy.
+
+        Returns:
+            Resonant frequency (rad/s)
+        """
+        # Discretize the cantilever length
+        n_points = self.numXPoints
+        x = np.linspace(0, self.l, n_points)
+
+        # Get effective width at each position
+        w_eff = self.effective_beam_width_array(x)
+
+        # EI(x) and dm/dx(x)
+        EI = self.modulus() * w_eff * self.t**3 / 12
+        dm_dx = w_eff * self.t * self.rho_si
+
+        # Trial mode shape: static deflection under tip load
+        # phi''(x) = M(x)/EI(x) = (L-x)/EI(x), integrated twice
+        # We use a simplified polynomial that satisfies BCs: phi(0)=0, phi'(0)=0
+        xi = x / self.l
+        phi = 1.5 * xi**2 - 0.5 * xi**3  # Static deflection shape
+
+        # Second derivative of mode shape (curvature)
+        # d^2(phi)/dx^2 = d^2/dx^2 [1.5*(x/L)^2 - 0.5*(x/L)^3]
+        #               = 3/L^2 - 3x/L^3
+        phi_ddot = 3 / self.l**2 - 3 * x / self.l**3
+
+        # Potential energy: U = 0.5 * integral(EI * phi''^2 dx)
+        U = 0.5 * np.trapezoid(EI * phi_ddot**2, x)
+
+        # Kinetic energy coefficient: T = 0.5 * omega^2 * integral(dm_dx * phi^2 dx)
+        T_coeff = np.trapezoid(dm_dx * phi**2, x)
+
+        # omega^2 = 2*U / T_coeff
+        # Fallback to simple formula if T_coeff is zero or negative
+        omega = math.sqrt(2 * U / T_coeff) if T_coeff > 0 else math.sqrt(self.stiffness() / self.effective_mass())
+
+        return omega
 
     # Resonant frequency for undamped vibration (first mode)
     # Units: cycles/sec
