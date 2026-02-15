@@ -8,32 +8,44 @@ Generate dopant profile lookup tables for PiezoD using FLOOXS TCAD process simul
 
 Install Docker Desktop: https://www.docker.com/products/docker-desktop/
 
-Free for personal and educational use.
-
 ### FLOOXS
 
 FLOOXS is free for academic/research use but requires registration.
 
 Request access: http://www.flooxs.ece.ufl.edu/index.php/Download
 
+Two versions are supported with separate templates:
+
+| Version | Template | Docker Files |
+|---------|----------|--------------|
+| FLOOXS_2026 | `templates/ion_implant.tcl` | `Dockerfile`, `docker-compose.yml` |
+| FLOOXS_2024 | `templates/ion_implant_2024.tcl` | `Dockerfile.2024`, `docker-compose.2024.yml` |
+
 ### FLOOXS Documentation
 
-Download the FLOOXS manual for offline reference:
+Local copy in `www.flooxs.ece.ufl.edu/` (gitignored). To download:
+
+```powershell
+./grab_flooxs_docs.ps1
+```
+
+Or manually:
 
 ```powershell
 scoop install wget
-wget -r -l 5 -E -k -np -nH --cut-dirs=1 -e robots=off --reject-regex "(load|api)\.php|action=|Special:|oldid=|title=|User:|Talk:|File:" -P flooxs_docs http://www.flooxs.ece.ufl.edu/index.php/Main_Page
+wget -r -l 5 -E -k -np -e robots=off --reject-regex "(load|api)\.php|action=|Special:|oldid=|title=|User:|Talk:|File:" http://www.flooxs.ece.ufl.edu/index.php/Main_Page
 ```
 
 ## Setup
 
 1. Install Docker Desktop and verify it's running
 2. Download FLOOXS source code after registration
-3. Extract to `FLOOXS_2026/` in this folder (gitignored, not committed)
-4. Build the Docker image (one time):
+3. Extract to `FLOOXS_2024/` or `FLOOXS_2026/` (gitignored)
+4. Build the Docker image:
 
 ```bash
 docker compose build
+docker compose -f docker-compose.2024.yml build
 ```
 
 ## Usage
@@ -42,42 +54,27 @@ Run a simulation:
 
 ```bash
 docker compose run --rm flooxs input.tcl
+docker compose -f docker-compose.2024.yml run --rm flooxs input.tcl
 ```
 
 Input/output files go in `simulations/` which is mounted into the container.
-
-Interactive FLOOXS prompt:
-
-```bash
-docker compose run --rm flooxs
-```
-
-Interactive bash shell (for debugging):
-
-```bash
-docker compose run --rm --entrypoint /bin/bash flooxs
-```
-
-## Workflow
-
-1. Generate inputs - Python script creates FLOOXS input files in `simulations/`
-2. Run simulations - `docker compose run` executes FLOOXS on each input
-3. Post-process - Python extracts profiles and builds lookup table
 
 ## Structure
 
 ```
 lookupTableGeneration/
-├── Dockerfile
-├── docker-compose.yml
-├── FLOOXS_2026/             # FLOOXS source (gitignored)
-├── templates/
-│   └── ion_implant.tcl      # FLOOXS simulation template
-├── simulations/             # Input/output directory (mounted in container)
-├── simulation.template      # TSUPREM-4 reference template
-├── simulationControl.py     # TSUPREM-4 batch runner
-├── postProcessTables.m      # MATLAB post-processing
-└── lookupTable.mat          # Generated lookup table data
+├── Dockerfile, docker-compose.yml           # FLOOXS_2026
+├── Dockerfile.2024, docker-compose.2024.yml # FLOOXS_2024
+├── FLOOXS_2024/, FLOOXS_2026/               # Source (gitignored)
+├── templates/                               # Parameterized .tcl files (${dopant}, ${dose}, etc.)
+│   ├── ion_implant.tcl                      # FLOOXS_2026
+│   └── ion_implant_2024.tcl                 # FLOOXS_2024
+├── scripts/                                 # Python: parameter substitution, run Docker, parse output
+├── simulations/                             # Working directory mounted into Docker container
+│   └── reference_iv_recomb.tcl              # Reference: I-V recombination model
+├── simulation.template                      # TSUPREM-4 reference (legacy)
+├── simulationControl.py                     # TSUPREM-4 runner (legacy)
+└── lookupTable.mat                          # Generated data
 ```
 
 ## Parameter Space

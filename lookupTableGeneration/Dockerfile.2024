@@ -13,9 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy FLOOXS source (user must provide this folder)
-# Use FLOOXS_2024 or FLOOXS_2026 depending on which version you have
-COPY FLOOXS_2026/ /opt/flooxs/
+# Copy FLOOXS 2024 source (user must provide this folder)
+COPY FLOOXS_2024/ /opt/flooxs/
 
 # Set environment
 ENV FLXSHOME=/opt/flooxs
@@ -23,7 +22,8 @@ ENV PL_LIBRARY=/usr/share/plplot5.15.0/tcl/
 
 # Build FLOOXS
 WORKDIR /opt/flooxs
-RUN cp src/License.pdf . && mkdir -p build && cd build && cmake .. && make -j$(nproc)
+# Create placeholder License.pdf for CPack (actual license not redistributed)
+RUN touch License.pdf && mkdir -p build && cd build && cmake .. && make -j$(nproc)
 
 # Create working directory for simulations
 WORKDIR /work

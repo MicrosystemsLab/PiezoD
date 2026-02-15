@@ -1,5 +1,5 @@
 # Ion implantation and diffusion simulation for PiezoD lookup tables
-# FLOOXS template - parameters substituted by runner script
+# FLOOXS_2024 template - parameters substituted by runner script
 #
 # Parameters:
 #   ${dopant}      - boron, phosphorus, or arsenic
@@ -33,24 +33,28 @@ implant ${dopant} dose=${dose} energy=${energy} tilt=7
 # Initialize interstitials from implant damage (+1 model)
 sel z=${dopant} name=Inter
 
-# Set up solutions
-options !constdatafields storenodes
+# Set up solutions (FLOOXS_2024 syntax)
 solution name=Temp !negative add const val=800
-solution name=Inter solve !negative add
-solution name=${dopant} solve !negative
 
 # Temperature-dependent parameters (Arrhenius)
 # Vt = kT in eV
 set Vt "(8.612e-5*(Temp+273.0))"
 
+solution name=Inter solve !negative add
+
 # Equilibrium interstitial concentration
-# Source: FLOOXS_2026/Params/Silicon/Interstitial
+# Source: Params/Silicon/Interstitial
 #   Cstar = Arrhenius(5.0e22*exp(11.2), 3.7)
 set cis "(5.0e22*exp(11.2)*exp(-3.7/$Vt))"
-solution name=CIStar add const val="$cis"
+solution name=CIStar add const val = "$cis"
+
+# TED enhancement factor (required as intermediate solution in 2024)
+solution name=TED const silicon val = (Inter/CIStar)
+
+solution name=${dopant} solve !negative
 
 # Interstitial diffusivity
-# Source: FLOOXS_2026/Params/Silicon/Interstitial
+# Source: Params/Silicon/Interstitial
 #   D0 = Arrhenius(0.138, 1.37)
 set DiffI "0.138*exp(-1.37/$Vt)"
 
@@ -58,7 +62,7 @@ set DiffI "0.138*exp(-1.37/$Vt)"
 pdbSetString Silicon Inter Equation "ddt(Inter) - CIStar * $DiffI * grad(Inter/CIStar)"
 
 # Surface recombination at oxide/silicon interface
-# Source: FLOOXS_2026/Test/Testsuite/floops/Diffuse/SurfRecomb.tcl
+# Source: Test/Segregation/SurfRecomb.tcl
 #   Ksurf = pi * DiffI * lattice_spacing * kink_site_density
 #   lattice_spacing = 2.714e-8 cm
 #   kink_site_density = 1.3e15 cm^-2
@@ -66,13 +70,13 @@ set Ksurf "(3.14159 * $DiffI * 2.714e-8 * 1.3e15)"
 pdbSetString Oxide_Silicon Inter Silicon Equation "$Ksurf*(Inter(Silicon)-CIStar)"
 
 # Dopant diffusion with TED enhancement
-# Source: FLOOXS_2026/Params/Silicon/Boron/Interstitial
+# Source: Params/Silicon/Boron/Interstitial
 #   D0 = Arrhenius(0.743, 3.56)
 #   Dp = Arrhenius(0.617, 3.56)
 #   Total interstitial-mediated: (D0 + Dp) = 1.36, Ea = 3.56 eV
 # Note: Vacancy-mediated diffusion not included (would add 0.34 to prefactor)
 set DiffDopant "1.36*exp(-3.56/$Vt)"
-pdbSetString Silicon ${dopant} Equation "ddt(${dopant}) - ($DiffDopant) * (Inter/CIStar) * grad(${dopant})"
+pdbSetString Silicon ${dopant} Equation "ddt(${dopant}) - ($DiffDopant) * TED * grad(${dopant})"
 
 # Pre-anneal profile
 puts "=== PRE-ANNEAL ==="

@@ -1,0 +1,9 @@
+services:
+  flooxs:
+    build:
+      context: .
+      dockerfile: Dockerfile.2024
+    image: piezod/flooxs:2024
+    volumes:
+      - ./simulations:/work
+    working_dir: /work
