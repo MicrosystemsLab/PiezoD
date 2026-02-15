@@ -16,6 +16,15 @@ FLOOXS is free for academic/research use but requires registration.
 
 Request access: http://www.flooxs.ece.ufl.edu/index.php/Download
 
+### FLOOXS Documentation
+
+Download the FLOOXS manual for offline reference:
+
+```powershell
+scoop install wget
+wget -r -l 5 -E -k -np -nH --cut-dirs=1 -e robots=off --reject-regex "(load|api)\.php|action=|Special:|oldid=|title=|User:|Talk:|File:" -P flooxs_docs http://www.flooxs.ece.ufl.edu/index.php/Main_Page
+```
+
 ## Setup
 
 1. Install Docker Desktop and verify it's running
@@ -61,13 +70,14 @@ docker compose run --rm --entrypoint /bin/bash flooxs
 lookupTableGeneration/
 ├── Dockerfile
 ├── docker-compose.yml
+├── FLOOXS_2026/             # FLOOXS source (gitignored)
 ├── templates/
 │   └── ion_implant.tcl      # FLOOXS simulation template
 ├── simulations/             # Input/output directory (mounted in container)
-└── legacy/                  # TSUPREM-4 reference files
-    ├── simulation.template
-    ├── simulationControl.py
-    └── postProcessTables.m
+├── simulation.template      # TSUPREM-4 reference template
+├── simulationControl.py     # TSUPREM-4 batch runner
+├── postProcessTables.m      # MATLAB post-processing
+└── lookupTable.mat          # Generated lookup table data
 ```
 
 ## Parameter Space
