@@ -1,5 +1,5 @@
 # Ion implantation and diffusion simulation for PiezoD lookup tables
-# FLOOXS template - parameters substituted by runner script
+# FLOOXS template with I-V recombination - parameters substituted by runner script
 #
 # Parameters:
 #   ${dopant}      - boron, phosphorus, or arsenic
@@ -8,12 +8,16 @@
 #   ${temp}        - anneal temperature (C)
 #   ${time}        - anneal time (minutes)
 #
-# Temperature ramp matches TSUPREM-4:
-#   - 45 min ramp from 800C to ${temp}
-#   - ${time} min dwell at ${temp}
-#   - 45 min ramp from ${temp} to 800C
+# Physics:
+#   - Interstitial and vacancy point defect dynamics
+#   - I-V bulk recombination (diffusion-limited)
+#   - Surface recombination at oxide/silicon interface
+#   - Dopant diffusion via both interstitial and vacancy mechanisms
+#   - Temperature ramp matching TSUPREM-4
+#
+# All parameters from FLOOXS_2026/Params/Silicon/
 
-math diffuse dim=1 sblock scale bcgs row
+math diffuse dim=1 umf none col scale
 
 # 1D mesh (5um depth, fine near surface for implant resolution)
 line x loc=-0.001 spac=0.001 tag=TopOx
@@ -36,45 +40,102 @@ sel z=${dopant} name=Inter
 # Set up solutions
 options !constdatafields storenodes
 solution name=Temp !negative add const val=800
+
+# =============================================================================
+# POINT DEFECT PARAMETERS (temperature-dependent via Arrhenius)
+# Source: FLOOXS_2026/Params/Silicon/Interstitial, Vacancy, Info
+# =============================================================================
+
+set lattice 2.714417617e-8
+
+# Equilibrium concentrations: Cstar = prefactor * exp(-Ea/kT)
+# exp(11.2) = 7.2967e4, exp(9.0) = 8.1031e3
+pdbSetDouble Silicon Inter Cstar {[Arrhenius 3.6484e27 3.7]}
+pdbSetDouble Silicon Vac Cstar {[Arrhenius 4.0515e26 3.97]}
+set cis [pdbDelayDouble Silicon Inter Cstar]
+set cvs [pdbDelayDouble Silicon Vac Cstar]
+
+# Defect diffusivities
+pdbSetDouble Silicon Inter Diff {[Arrhenius 0.138 1.37]}
+pdbSetDouble Silicon Vac Diff {[Arrhenius 1.18e-4 0.1]}
+set DiffI [pdbDelayDouble Silicon Inter Diff]
+set DiffV [pdbDelayDouble Silicon Vac Diff]
+
+# I-V bulk recombination rate: kIV = 4*pi*(D_I+D_V)*lattice
+# Cannot express sum of Arrhenius as single Arrhenius, so inline it
+set kIV "(4.0*3.14159*($DiffI+$DiffV)*$lattice)"
+
+# =============================================================================
+# DOPANT DIFFUSION PARAMETERS
+# Source: FLOOXS_2026/Params/Silicon/{Dopant}/Interstitial, Vacancy
+# =============================================================================
+
+switch ${dopant} {
+    boron {
+        pdbSetDouble Silicon Boron DiffI {[Arrhenius 1.36 3.56]}
+        pdbSetDouble Silicon Boron DiffV {[Arrhenius 0.34 3.56]}
+    }
+    phosphorus {
+        pdbSetDouble Silicon Phosphorus DiffI {[Arrhenius 5.6 3.71]}
+        pdbSetDouble Silicon Phosphorus DiffV 0.0
+    }
+    arsenic {
+        pdbSetDouble Silicon Arsenic DiffI {[Arrhenius 0.0666 3.45]}
+        pdbSetDouble Silicon Arsenic DiffV {[Arrhenius 12.8 4.05]}
+    }
+}
+set DiffDopantI [pdbDelayDouble Silicon ${dopant} DiffI]
+set DiffDopantV [pdbDelayDouble Silicon ${dopant} DiffV]
+
+# =============================================================================
+# SURFACE RECOMBINATION PARAMETERS
+# Source: FLOOXS_2026/Params/Oxide_Silicon/Interstitial, Vacancy
+# =============================================================================
+
+# Interstitial surface recombination: Ksurf = pi * D_I * lattice * KinkSite
+# KinkSite ~ 1.3e15 (saturated at anneal temperatures)
+set KsurfI "(3.14159*$DiffI*$lattice*1.3e15)"
+
+# Vacancy surface recombination: KinkSite = 1.0e5 (constant)
+set KsurfV "(3.14159*$DiffV*$lattice*1.0e5)"
+
+# =============================================================================
+# SOLUTION DEFINITIONS
+# =============================================================================
+
 solution name=Inter solve !negative add
+solution name=Vac solve !negative add
 solution name=${dopant} solve !negative
 
-# Temperature-dependent parameters (Arrhenius)
-# Vt = kT in eV
-set Vt "(8.612e-5*(Temp+273.0))"
+# Initialize vacancies from implant damage (Frenkel pair model)
+# Each implanted atom creates one I-V pair, so initial V = initial I
+sel z=${dopant} name=Vac
 
-# Equilibrium interstitial concentration
-# Source: FLOOXS_2026/Params/Silicon/Interstitial
-#   Cstar = Arrhenius(5.0e22*exp(11.2), 3.7)
-set cis "(5.0e22*exp(11.2)*exp(-3.7/$Vt))"
-solution name=CIStar add const val="$cis"
+# =============================================================================
+# DIFFUSION EQUATIONS
+# =============================================================================
 
-# Interstitial diffusivity
-# Source: FLOOXS_2026/Params/Silicon/Interstitial
-#   D0 = Arrhenius(0.138, 1.37)
-set DiffI "0.138*exp(-1.37/$Vt)"
+# Interstitial diffusion with I-V bulk recombination
+# dI/dt = D_I * laplacian(I) + k_IV * (I*V - I*V*)
+# Bulk recombination sign: positive drives ddt negative (FLOOXS convention)
+pdbSetString Silicon Inter Equation "ddt(Inter) - $DiffI*grad(Inter) + $kIV*(Inter*Vac - ($cis)*($cvs))"
 
-# Interstitial diffusion equation
-pdbSetString Silicon Inter Equation "ddt(Inter) - CIStar * $DiffI * grad(Inter/CIStar)"
+# Vacancy diffusion with I-V bulk recombination
+pdbSetString Silicon Vac Equation "ddt(Vac) - $DiffV*grad(Vac) + $kIV*(Inter*Vac - ($cis)*($cvs))"
 
 # Surface recombination at oxide/silicon interface
-# Source: FLOOXS_2026/Test/Testsuite/floops/Diffuse/SurfRecomb.tcl
-#   Ksurf = pi * DiffI * lattice_spacing * kink_site_density
-#   lattice_spacing = 2.714e-8 cm
-#   kink_site_density = 1.3e15 cm^-2
-set Ksurf "(3.14159 * $DiffI * 2.714e-8 * 1.3e15)"
-pdbSetString Oxide_Silicon Inter Silicon Equation "$Ksurf*(Inter(Silicon)-CIStar)"
+# Interface recombination sign: negative (FLOOXS convention)
+pdbSetString Oxide_Silicon Inter Silicon Equation "-$KsurfI*(Inter(Silicon)-($cis))"
+pdbSetString Oxide_Silicon Vac Silicon Equation "-$KsurfV*(Vac(Silicon)-($cvs))"
 
-# Dopant diffusion with TED enhancement
-# Source: FLOOXS_2026/Params/Silicon/Boron/Interstitial
-#   D0 = Arrhenius(0.743, 3.56)
-#   Dp = Arrhenius(0.617, 3.56)
-#   Total interstitial-mediated: (D0 + Dp) = 1.36, Ea = 3.56 eV
-# Note: Vacancy-mediated diffusion not included (would add 0.34 to prefactor)
-set DiffDopant "1.36*exp(-3.56/$Vt)"
-pdbSetString Silicon ${dopant} Equation "ddt(${dopant}) - ($DiffDopant) * (Inter/CIStar) * grad(${dopant})"
+# Dopant diffusion with interstitial AND vacancy enhancement
+# dC/dt = div(D_I*(I/I*) * grad(C)) + div(D_V*(V/V*) * grad(C))
+pdbSetString Silicon ${dopant} Equation "ddt(${dopant}) - ($DiffDopantI) * (Inter/($cis)) * grad(${dopant}) - ($DiffDopantV) * (Vac/($cvs)) * grad(${dopant})"
 
-# Pre-anneal profile
+# =============================================================================
+# OUTPUT: PRE-ANNEAL PROFILE
+# =============================================================================
+
 puts "=== PRE-ANNEAL ==="
 sel z=${dopant}
 foreach v [print.1d] {
@@ -84,10 +145,13 @@ foreach v [print.1d] {
     puts "$d $c"
 }
 
+# =============================================================================
+# ANNEAL SEQUENCE (matches TSUPREM-4)
+# =============================================================================
+
 # Calculate ramp rate: (temp - 800) / (45 min * 60 s/min) in C/s
 set ramprate [expr {(${temp} - 800.0) / 2700.0}]
 
-# TSUPREM-4 anneal sequence
 puts "=== RAMP UP: 45 min, 800C -> ${temp}C ==="
 diffuse time=45 temp=800 ramprate=$ramprate
 
@@ -97,7 +161,10 @@ diffuse time=${time} temp=${temp}
 puts "=== RAMP DOWN: 45 min, ${temp}C -> 800C ==="
 diffuse time=45 temp=${temp} ramprate=-$ramprate
 
-# Post-anneal profile
+# =============================================================================
+# OUTPUT: POST-ANNEAL PROFILES
+# =============================================================================
+
 puts "=== POST-ANNEAL ==="
 sel z=${dopant}
 foreach v [print.1d] {
@@ -107,8 +174,28 @@ foreach v [print.1d] {
     puts "$d $c"
 }
 
-# Junction depth at 1e17 cm^-3
-sel z=${dopant}-1e17
+puts "=== POST-ANNEAL INTERSTITIALS ==="
+sel z=Inter
+foreach v [print.1d] {
+    lassign $v d c
+    if {$c == "Value"} continue
+    if {$d < 0} continue
+    if {$d > 0.5} break
+    puts "$d $c"
+}
+
+puts "=== POST-ANNEAL VACANCIES ==="
+sel z=Vac
+foreach v [print.1d] {
+    lassign $v d c
+    if {$c == "Value"} continue
+    if {$d < 0} continue
+    if {$d > 0.5} break
+    puts "$d $c"
+}
+
+# Junction depth at 1e15 cm^-3 (typical substrate background)
+sel z=${dopant}-1e15
 set xj [interpolate silicon val=0.0]
 puts "=== RESULTS ==="
 puts "Xj: $xj um"

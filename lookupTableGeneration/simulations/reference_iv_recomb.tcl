@@ -51,14 +51,14 @@ puts "I*V*: $IVprod"
 
 # Interstitial equation with bulk recombination
 # dI/dt = D_I * grad(I) - k*(I*V - I*V*)
-pdbSetString Silicon Inter Equation "ddt(Inter) - $DiffI*grad(Inter) - $kIV*(Inter*Vac - $IVprod)"
+pdbSetString Silicon Inter Equation "ddt(Inter) - $DiffI*grad(Inter) + $kIV*(Inter*Vac - $IVprod)"
 
 # Vacancy equation with bulk recombination
-pdbSetString Silicon Vac Equation "ddt(Vac) - $DiffV*grad(Vac) - $kIV*(Inter*Vac - $IVprod)"
+pdbSetString Silicon Vac Equation "ddt(Vac) - $DiffV*grad(Vac) + $kIV*(Inter*Vac - $IVprod)"
 
 # Surface recombination for interstitials
 set Ksurf [expr {3.14159 * $DiffI * $lattice * 1.3e15}]
-pdbSetString Oxide_Silicon Inter Silicon Equation "$Ksurf*(Inter(Silicon)-$CIStar)"
+pdbSetString Oxide_Silicon Inter Silicon Equation "-$Ksurf*(Inter(Silicon)-$CIStar)"
 
 # Boron with TED
 solution name=Boron solve !negative
