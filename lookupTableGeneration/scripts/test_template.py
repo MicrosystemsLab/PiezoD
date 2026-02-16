@@ -1,4 +1,4 @@
-"""Test ion_implant.tcl template with reference case parameters."""
+"""Test ion_implant_fermi.tcl template with reference case parameters."""
 
 import string
 import subprocess
@@ -14,7 +14,7 @@ params = {
 }
 
 # Load template
-template_path = Path(__file__).parent.parent / "templates" / "ion_implant.tcl"
+template_path = Path(__file__).parent.parent / "templates" / "ion_implant_fermi.tcl"
 template_string = template_path.read_text()
 
 # Substitute parameters using string.Template (same as simulationControl.py)

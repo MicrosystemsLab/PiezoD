@@ -20,12 +20,16 @@
 #
 # All parameters from FLOOXS_2026/Params/Silicon/
 
+# scale = row-column equilibration of the Jacobian (A[i,j] *= 1/sqrt(max_row_i * max_col_j))
+# Essential for coupled systems with variables spanning many orders of magnitude
+# (e.g. dopant ~1e21, defects ~1e15, Poni ~500)
 math diffuse dim=1 umf none col scale
 
 # 1D mesh (5um depth, fine near surface for implant resolution)
 line x loc=-0.001 spac=0.001 tag=TopOx
-line x loc=0.0 spac=0.001 tag=Top
-line x loc=0.1 spac=0.001
+line x loc=0.0 spac=0.0002 tag=Top
+line x loc=0.05 spac=0.0002
+line x loc=0.15 spac=0.001
 line x loc=0.5 spac=0.005
 line x loc=2.0 spac=0.02
 line x loc=5.0 spac=0.05 tag=Bottom
@@ -47,6 +51,12 @@ sel z=${dopant} name=Inter
 # Set up solutions
 options !constdatafields storenodes
 solution name=Temp !negative add const val=800
+
+# Solver settings
+pdbSetDouble Math iterLimit 500
+pdbSetDouble Math updateLimit 1e-8
+pdbSetDouble Math rhsLimit 1e-20
+pdbSetDouble Math rhsMin 1e-2
 
 # =============================================================================
 # THERMAL VOLTAGE AND INTRINSIC CARRIER CONCENTRATION
@@ -295,13 +305,13 @@ foreach v [print.1d] {
 set ramprate [expr {(${temp} - 800.0) / 2700.0}]
 
 puts "=== RAMP UP: 45 min, 800C -> ${temp}C ==="
-diffuse time=45 temp=800 ramprate=$ramprate
+diffuse time=45 temp=800 ramprate=$ramprate init=1e-6 damp.trbdf
 
 puts "=== DWELL: ${time} min at ${temp}C ==="
-diffuse time=${time} temp=${temp}
+diffuse time=${time} temp=${temp} init=1e-6 damp.trbdf
 
 puts "=== RAMP DOWN: 45 min, ${temp}C -> 800C ==="
-diffuse time=45 temp=${temp} ramprate=-$ramprate
+diffuse time=45 temp=${temp} ramprate=-$ramprate init=1e-6 damp.trbdf
 
 # =============================================================================
 # OUTPUT: POST-ANNEAL PROFILES

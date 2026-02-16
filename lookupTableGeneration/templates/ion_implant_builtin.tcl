@@ -8,7 +8,7 @@
 #   - "term name=X print" command (used by DopantBulk for Charge check)
 #   - "DiffLimit" function (used at solve time for I-V recombination)
 #   - pdb auto-loading from Params/ directory
-# Use ion_implant.tcl (hand-written equations) for actual simulations.
+# Use ion_implant_fermi.tcl or ion_implant_react.tcl for actual simulations.
 #
 # Parameters:
 #   ${dopant}      - boron, phosphorus, or arsenic

@@ -18,7 +18,7 @@ Two versions are supported with separate templates:
 
 | Version | Template | Docker Files |
 |---------|----------|--------------|
-| FLOOXS_2026 | `templates/ion_implant.tcl` | `Dockerfile`, `docker-compose.yml` |
+| FLOOXS_2026 | `templates/ion_implant_fermi.tcl`, `templates/ion_implant_react.tcl` | `Dockerfile`, `docker-compose.yml` |
 | FLOOXS_2024 | `templates/ion_implant_2024.tcl` | `Dockerfile.2024`, `docker-compose.2024.yml` |
 
 ### FLOOXS Documentation
@@ -67,7 +67,8 @@ lookupTableGeneration/
 ├── Dockerfile.2024, docker-compose.2024.yml # FLOOXS_2024
 ├── FLOOXS_2024/, FLOOXS_2026/               # Source (gitignored)
 ├── templates/                               # Parameterized .tcl files (${dopant}, ${dose}, etc.)
-│   ├── ion_implant.tcl                      # FLOOXS_2026
+│   ├── ion_implant_fermi.tcl                # Fermi-level diffusion (boron/phosphorus/arsenic)
+│   ├── ion_implant_react.tcl                # Dopant-defect pair reactions (boron only, BIC)
 │   └── ion_implant_2024.tcl                 # FLOOXS_2024
 ├── scripts/                                 # Python: parameter substitution, run Docker, parse output
 ├── simulations/                             # Working directory mounted into Docker container
