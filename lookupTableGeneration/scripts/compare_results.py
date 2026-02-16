@@ -68,7 +68,7 @@ def parse_flooxs_output(output_path: Path) -> dict[str, NDArray]:
 def calculate_junction_depth(
     depth: NDArray,
     concentration: NDArray,
-    background_doping: float = 1e15,
+    background_doping: float = 1.4e15,
 ) -> float:
     """Calculate junction depth where doping equals background level.
 
