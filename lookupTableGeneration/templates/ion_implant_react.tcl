@@ -23,7 +23,8 @@
 math diffuse dim=1 umf none col scale
 
 # 1D mesh (5um depth, fine near surface for implant resolution)
-line x loc=-0.001 spac=0.001 tag=TopOx
+# 250A (25nm) protection oxide matches TSUPREM-4 pre-implant oxidation
+line x loc=-0.025 spac=0.005 tag=TopOx
 line x loc=0.0 spac=0.0002 tag=Top
 line x loc=0.05 spac=0.0002
 line x loc=0.15 spac=0.001
@@ -128,6 +129,11 @@ set Bind_BV [pdbDelayDouble Silicon boron BV_Binding]
 set D0_BV [pdbDelayDouble Silicon boron BV_D0]
 set Dp_BV [pdbDelayDouble Silicon boron BV_Dp]
 
+# BIC cluster: effective two-body B+I <-> BIClust with 2.5 eV binding energy
+# Lumps higher-order clusters (B3I, B4I) into single immobile species
+pdbSetDouble Silicon boron Clust_Bind {[Arrhenius 2.0e-23 -2.5]}
+set Bind_Cl [pdbDelayDouble Silicon boron Clust_Bind]
+
 # Diffusion-limited reaction rates: Krate = 4*pi*D_defect*lattice
 # DiffLimit with barrier=0 reduces to just the prefactor
 set KrateBI "(4.0*3.14159*$DiffI*$lattice)"
@@ -150,14 +156,26 @@ solution name=Vac solve !negative add
 solution name=boron solve !negative
 solution name=boronInt solve !negative add
 solution name=boronVac solve !negative add
+solution name=BIClust solve !negative add
 
 # Fermi level coupling
 solution name = Charge add const val = 0.0 Silicon
 solution name = Noni add const val = "0.5*(Charge + sqrt(Charge*Charge + 4.0*$ni*$ni)) / $ni" Silicon
 solution name = Poni add const val = "0.5*(-Charge + sqrt(Charge*Charge + 4.0*$ni*$ni)) / $ni" Silicon
 
-# Initialize vacancies from implant damage, pairs to small values
-sel z=boron name=Vac
+# Initialize vacancies near zero (physical: +1 model creates only interstitials)
+sel z=1.0 name=Vac
+
+# Cluster equilibrium initialization at 800C (ramp start temperature)
+# K_cl >> K_BI (~2800x at 800C), so clusters dominate the B/I partition
+# Quadratic: BIClust = K_cl * B_free * I_free with B_free = I_free = B_total - BIClust
+# Solution: x = [(2KB+1) - sqrt(4KB+1)] / (2K)
+set kT_init [expr {8.617e-5 * (800.0 + 273.15)}]
+set K_cl_init [expr {2.0e-23 * exp(2.5 / $kT_init)}]
+sel z=boron name=Inter
+sel z=(2.0*${K_cl_init}*boron+1.0-sqrt(4.0*${K_cl_init}*boron+1.0))/(2.0*${K_cl_init}) name=BIClust
+sel z=boron-BIClust name=Inter
+sel z=Inter name=boron
 sel z=1.0 name=boronInt
 sel z=1.0 name=boronVac
 
@@ -182,7 +200,7 @@ term name = ScaleVac add eqn = "Vac/EqVac" Silicon
 # Solubility-limited active boron
 term name = boronActive add eqn = "($Css) * boron / (($Css) + boron)" Silicon
 
-# Substitutional boron: active minus paired
+# Substitutional boron: active minus paired (boron already excludes clustered B)
 term name = boronSub add eqn = "boronActive - boronInt - boronVac" Silicon
 
 # Charge neutrality: background donor - substitutional acceptor
@@ -192,6 +210,9 @@ term name = Charge add eqn = "1.4e15 - boronSub" Silicon
 # React = Krate * (boronSub * Defect - boronDefect / Binding)
 term name = ReactBI add eqn = "$KrateBI * (boronSub * Inter - boronInt / $Bind_BI)" Silicon
 term name = ReactBV add eqn = "$KrateBV * (boronSub * Vac - boronVac / $Bind_BV)" Silicon
+
+# Cluster reaction: boronSub + Inter <-> BIClust (effective 2.5 eV binding)
+term name = ReactClust add eqn = "$KrateBI * (boronSub * Inter - BIClust / $Bind_Cl)" Silicon
 
 # Pair diffusivities: (D0 + Dp*Poni) / (Binding * EqDefect * Poni)
 # Absorbs charge factor so flux = DiffPair * grad(pair * Poni)
@@ -204,7 +225,7 @@ term name = DiffBV add eqn = "($D0_BV + $Dp_BV * Poni) / ($Bind_BV * EqVac * Pon
 
 # --- Point defects: diffusion + IV recomb + pair reaction coupling ---
 pdbSetString Silicon Inter Equation \
-    "ddt(Inter) - $DiffI*EqInter*grad(ScaleInter) + $kIV*(Inter*Vac - EqInter*EqVac) + ReactBI"
+    "ddt(Inter) - $DiffI*EqInter*grad(ScaleInter) + $kIV*(Inter*Vac - EqInter*EqVac) + ReactBI + ReactClust"
 pdbSetString Silicon Vac Equation \
     "ddt(Vac) - $DiffV*EqVac*grad(ScaleVac) + $kIV*(Inter*Vac - EqInter*EqVac) + ReactBV"
 
@@ -216,7 +237,7 @@ pdbSetString Oxide_Silicon Vac Silicon Equation "-$KsurfV*(Vac(Silicon) - $EqV_s
 
 # --- Total boron: no direct flux, only pair reaction source/sink ---
 pdbSetString Silicon boron Equation \
-    "ddt(boron) + ReactBI + ReactBV"
+    "ddt(boron) + ReactBI + ReactBV + ReactClust"
 
 # --- BI pairs: diffusion + reaction ---
 pdbSetString Silicon boronInt Equation \
@@ -225,6 +246,10 @@ pdbSetString Silicon boronInt Equation \
 # --- BV pairs: diffusion + reaction ---
 pdbSetString Silicon boronVac Equation \
     "ddt(boronVac) - DiffBV * grad(boronVac * Poni) - ReactBV"
+
+# --- BIClust: immobile cluster, formed from B+I, dissolved thermally ---
+pdbSetString Silicon BIClust Equation \
+    "ddt(BIClust) - ReactClust"
 
 # =============================================================================
 # OUTPUT: PRE-ANNEAL PROFILE
@@ -287,8 +312,18 @@ foreach v [print.1d] {
     puts "$d $c"
 }
 
-# Junction depth from total boron (unpaired + BI pairs + BV pairs)
-sel z=boron+boronInt+boronVac-1.4e15
+puts "=== POST-ANNEAL CLUSTERS ==="
+sel z=BIClust
+foreach v [print.1d] {
+    lassign $v d c
+    if {$c == "Value"} continue
+    if {$d < 0} continue
+    if {$d > 0.5} break
+    puts "$d $c"
+}
+
+# Junction depth from total boron (unpaired + BI pairs + BV pairs + clusters)
+sel z=boron+boronInt+boronVac+BIClust-1.4e15
 set xj [interpolate silicon val=0.0]
 puts "=== RESULTS ==="
 puts "Xj: $xj um"
