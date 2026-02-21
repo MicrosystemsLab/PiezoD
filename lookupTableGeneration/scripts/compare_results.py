@@ -3,19 +3,21 @@
 Parses FLOOXS output, calculates Xj, Rs, Beta1, Beta2, Nz,
 and compares to reference values.
 
+All metrics (Rs, Beta1, Beta2, Nz) are integrated from the surface to the
+junction depth only. Below the junction the substrate is the opposite carrier
+type and does not contribute to the piezoresistor.
+
 Usage:
     python scripts/compare_results.py simulations/output.txt
 """
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
-
 from extract_reference import extract_reference_values, load_lookup_table
+from numpy.typing import NDArray
 
 
 def parse_flooxs_output(output_path: Path) -> dict[str, NDArray]:
@@ -314,12 +316,18 @@ def main() -> None:
     post = profiles["post_anneal"]
     print(f"Found {len(post['depth'])} data points in post-anneal profile")
 
-    # Calculate all metrics from FLOOXS output
+    # Calculate junction depth, then truncate profile there for remaining metrics.
+    # Rs, Beta1, Beta2, Nz are properties of the piezoresistor region only
+    # (surface to junction). Below the junction the substrate is the opposite
+    # carrier type and must not be included.
     xj = calculate_junction_depth(post["depth"], post["concentration"])
-    rs = calculate_sheet_resistance(post["depth"], post["concentration"], args.dopant)
-    beta1, beta2, nz = calculate_beta_nz(post["depth"], post["concentration"], args.dopant)
+    mask = post["depth"] <= xj
+    depth_xj = post["depth"][mask]
+    conc_xj = post["concentration"][mask]
+    rs = calculate_sheet_resistance(depth_xj, conc_xj, args.dopant)
+    beta1, beta2, nz = calculate_beta_nz(depth_xj, conc_xj, args.dopant)
 
-    print(f"\nFLOOXS results:")
+    print("\nFLOOXS results:")
     print(f"  Xj:    {xj:.4f} um")
     print(f"  Rs:    {rs:.2f} ohm/sq")
     print(f"  Beta1: {beta1:.4e}")
@@ -354,7 +362,7 @@ def main() -> None:
     beta2_ref = ref["Beta2"]
     nz_ref = ref["Nz"] * 1e-4  # m^-2 to cm^-2
 
-    print(f"\nTSUPREM-4 reference:")
+    print("\nTSUPREM-4 reference:")
     print(f"  Xj:    {xj_ref:.4f} um")
     print(f"  Rs:    {rs_ref:.2f} ohm/sq")
     print(f"  Beta1: {beta1_ref:.4e}")
@@ -366,7 +374,7 @@ def main() -> None:
             return "N/A"
         return f"{(val - ref_val) / ref_val * 100:+.1f}%"
 
-    print(f"\nComparison:")
+    print("\nComparison:")
     print(f"  Xj:    {pct_err(xj, xj_ref)}")
     print(f"  Rs:    {pct_err(rs, rs_ref)}")
     print(f"  Beta1: {pct_err(beta1, beta1_ref)}")

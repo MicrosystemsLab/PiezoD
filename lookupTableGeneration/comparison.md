@@ -65,25 +65,30 @@ the full doping profile through `postProcessTables.m` (not yet implemented for F
 
 ### FLOOXS v4: 5-stream + {311} clustering (2026-02-21)
 
-Template: `ion_implant_5pd.tcl`
-Parameters: 5-stream pair diffusion + {311} interstitial clustering, corrected KinkSite, Hobler-Moroz f_pl
-Key improvements: corrected KinkSite surface recombination (Arr(0.51,-2.63) instead of 1.3e15), {311} interstitial clustering (reformulated 1-moment model). Per-dopant: alpha_311=0.1 (B,As) / 0.6 (P), KsurfI=Arrhenius (B,As) / constant 1e11 (P).
+Template: `ion_implant_5pd_v4.tcl`
+Parameters: 5-stream pair diffusion + {311} interstitial clustering, corrected KinkSite, Hobler-Moroz f_pl.
+Per-dopant hacks: alpha_311=0.1 (B,As) / 0.6 (P), KsurfI=Arrhenius (B,As) / constant 1e11 (P).
 
-| Case                       | Xj (um) | Xj error | Notes |
-|----------------------------|---------|----------|-------|
-| B 2e14 80keV 1000C 30min  | 1.277   | +3.8%    | |
-| P 2e14 80keV 1000C 30min  | 0.706   | -0.6%    | |
-| As 2e14 80keV 1000C 30min | 0.495   | -4.8%    | |
-| B 2e14 20keV 900C 30min   | 0.631   | +6.9%    | |
-| As 2e14 20keV 900C 30min  | 0.314   | +97%     | Over-predicts |
-| B 2e16 80keV 1100C 120min | --      | --       | CRASH: Vac/boronVac diverge |
-| P 2e16 80keV 1100C 120min | --      | --       | DIVERGE: 500+ iters, 133 cutbacks |
-| P 2e14 20keV 900C 30min   | --      | --       | CRASH: PI pair stiffness |
-| As 2e16 80keV 1100C 120min| 2.588   | +45%     | Over-predicts |
+All metrics integrated from surface to junction depth (see README for details).
 
-Calibrated cases (2e14 80keV 1000C 30min) within 5% for all dopants.
+| Case | Xj | Rs | Beta1 | Beta2 | Nz | Status |
+|------|-----|-----|-------|-------|-----|--------|
+| B 2e14 80keV 1000C 30min | +3.8% | -7.9% | +3.1% | -0.8% | +13.3% | OK |
+| P 2e14 80keV 1000C 30min | -0.5% | -5.9% | +7.2% | +27.4% | +7.3% | OK |
+| As 2e14 80keV 1000C 30min | -4.8% | -12.5% | +17.3% | +111.1% | +1.0% | OK |
+| B 2e14 20keV 900C 30min | +7.0% | -36.4% | -0.9% | +7.2% | +90.3% | OK |
+| P 2e14 20keV 900C 30min | -- | -- | -- | -- | -- | CRASH: PI pair stiffness |
+| As 2e14 20keV 900C 30min | +96.6% | -36.9% | +28.3% | +521.2% | -8.9% | OK |
+| B 2e16 80keV 1100C 120min | -- | -- | -- | -- | -- | CRASH: Vac/boronVac diverge |
+| P 2e16 80keV 1100C 120min | -- | -- | -- | -- | -- | CRASH: PI pair stiffness |
+| As 2e16 80keV 1100C 120min | +44.6% | +8.3% | +10.1% | -2.3% | -4.7% | OK |
+
+Calibrated cases (2e14 80keV 1000C 30min) within 5% on Xj for all dopants.
 High-dose (2e16) crashes or over-predicts -- solver stiffness from extreme defect supersaturation.
-As 20keV over-predicts because Arrhenius KinkSite is too weak at 900C (KinkSite_I ~ 1e11), allowing too much TED.
+900C cases over-predict: f_cluster=0.9 leaves 10% of interstitials free at initialization,
+and {311} dissolution is frozen at 900C (Kr time constant ~250 min >> 30 min anneal),
+so initial free I drives excessive TED. In TSUPREM-4, CL.INI.F=1.0 (all I initially clustered).
+Beta1/Beta2 errors have ~5% systematic offset from mobility model differences (Python vs MATLAB).
 
 ### FLOOXS v3: 5-stream with effective +n model (2026-02-20)
 
