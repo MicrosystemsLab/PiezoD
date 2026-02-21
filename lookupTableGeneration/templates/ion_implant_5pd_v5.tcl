@@ -29,7 +29,9 @@
 #   - 250A protection oxide matching TSUPREM-4
 #   - Temperature ramp matching TSUPREM-4
 #
-# All parameters from FLOOXS_2026/Params/Silicon/
+# v5: V_eq initialization for B Vac (avoids extreme IV stiffness at high dose).
+# Per-dopant alpha_311 and KinkSite from v4 (required for solver stability).
+# All base parameters from FLOOXS_2026/Params/Silicon/
 
 math diffuse dim=1 umf none col scale
 
@@ -142,8 +144,8 @@ set DiffV [pdbDelayDouble Silicon Vac Diff]
 # Near QSS the parenthesized expression is small, avoiding cancellation stiffness.
 # Kr Ea=3.6 eV (Eaglesham et al. 1994, {311} dissolution).
 # alpha controls QSS ScaleInter: when CIc >> Inter, ScaleInter_qss ~ 1/alpha.
-# Per-dopant alpha: P needs stronger clustering (higher alpha) to compensate
-# for its weaker KinkSite surface recombination.
+# Per-dopant alpha: P needs stronger clustering (higher alpha) to reduce
+# ScaleInter_qss, compensating for its weaker surface recombination.
 set Kr_311 {[Arrhenius 2.0e11 3.6]}
 switch ${dopant} {
     boron -
@@ -242,7 +244,7 @@ set Css [pdbDelayDouble Silicon ${dopant} Solubility]
 
 # KinkSite_I: temperature-dependent Langmuir expression for B/As,
 # intermediate value for P (full Arrhenius ~1.3e10 at 1000C crashes due to
-# PI pair stiffness; constant 1.3e15 is too strong, makes {311} counterproductive).
+# PI pair stiffness; constant 1e11 is weak enough for solver stability).
 switch ${dopant} {
     boron -
     arsenic {
@@ -321,9 +323,10 @@ puts "Init: Inter=(1-f)*f_pl*dop, CIc=f*f_pl*dop (f=$f_cluster, f_pl=$f_pl)"
 # Per-dopant initialization
 switch ${dopant} {
     boron {
-        # V = 1.0 (near zero): IV recomb negligible initially, allowing
-        # excess I to persist and drive TED through BI pair diffusion.
-        sel z=1.0 name=Vac
+        # V at thermal equilibrium for 800C (ramp start temperature).
+        # Physical: implant creates I, not V. V_eq avoids extreme IV stiffness.
+        set V_eq_init [expr {4.0515e26 * exp(-3.97 / $kT_init)}]
+        sel z=$V_eq_init name=Vac
         # Pairs initialized to small values (solver forms them dynamically)
         sel z=1.0 name=boronInt
         sel z=1.0 name=boronVac

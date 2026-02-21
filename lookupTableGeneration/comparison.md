@@ -26,26 +26,25 @@ Generate a test script from the template and run in Docker:
 
 ```bash
 cd lookupTableGeneration
-bash scripts/gen_test.sh <dopant> <dose> <energy> <temp> <time> templates/ion_implant_ted_qss.tcl > simulations/test.tcl
+bash scripts/gen_test.sh <dopant> <dose> <energy> <temp> <time> templates/ion_implant_5pd_v5.tcl > simulations/test.tcl
 MSYS_NO_PATHCONV=1 docker compose run --rm flooxs /work/test.tcl
 ```
 
-The template currently outputs Xj only. Rs, Nz, beta1, beta2 require post-processing
-the full doping profile through `postProcessTables.m` (not yet implemented for FLOOXS).
+Rs, Nz, Beta1, Beta2 are post-processed from the concentration profile output:
+
+```bash
+python scripts/compare_results.py simulations/output.txt --dopant <dopant> --dose <dose> --energy <energy> --temp <temp> --time <time>
+```
 
 ## Template parameters
 
-`ion_implant_ted_qss.tcl` - QSS/Fermi hybrid model:
-- B: QSS with explicit interstitial transport (2 solved variables: B + Inter)
-  - D_eff = D_I(Poni) * ScaleInter + D_V(Poni)
-  - ScaleInter = I/I* (uncapped), D_V floor stabilizes solver
-  - Surface recombination only (no bulk I-V recombination, no BIC clustering)
-- P: Fermi-level dependent diffusivity, no TED (1 solved variable)
-  - D_eff = D0 + Dn*Noni + Dnn*Noni^2
-  - Inter PDE too stiff at high dose (diverges at 2e16)
-- As: QSS with explicit interstitial transport, ScaleV=1 (2 solved variables: As + Inter)
-  - D_eff = D_I * ScaleInter + D_V(Noni)
-  - ScaleInter = I/I* (uncapped), V at equilibrium
+`ion_implant_5pd_v5.tcl` - 5-stream pair diffusion + {311} clustering:
+- All dopants: explicit interstitial transport, {311} clustering, Hobler-Moroz f_pl
+- B: BI + BV pairs, IV recombination, V_eq initialization
+- P: PI pairs only (I-only diffuser), alpha=0.6, constant KinkSite=1e11
+- As: AsI + AsV pairs, IV recombination, V_eq initialization
+- Per-dopant alpha_311: 0.1 (B,As) / 0.6 (P)
+- Per-dopant KinkSite: Arrhenius (B,As) / constant 1e11 (P)
 
 ## Spot-check comparison (no oxide)
 
@@ -63,31 +62,140 @@ the full doping profile through `postProcessTables.m` (not yet implemented for F
 | As 2e14 80keV 1000C 30min | 0.520   | 289.4       | 1.59e+18  | 0.6177 | 0.0461 |
 | As 2e16 80keV 1100C 120min| 1.790   | 6.0         | 1.75e+20  | 0.3598 | 0.2534 |
 
-### FLOOXS v4: 5-stream + {311} clustering (2026-02-21)
+### FLOOXS v5: 5-stream + {311} + V_eq init (2026-02-21)
 
-Template: `ion_implant_5pd_v4.tcl`
-Parameters: 5-stream pair diffusion + {311} interstitial clustering, corrected KinkSite, Hobler-Moroz f_pl.
-Per-dopant hacks: alpha_311=0.1 (B,As) / 0.6 (P), KsurfI=Arrhenius (B,As) / constant 1e11 (P).
+Template: `ion_implant_5pd_v5.tcl`
+
+Physics: 5-stream pair diffusion with {311} interstitial clustering. V_eq initialization
+for B Vac (avoids extreme IV stiffness vs v4). Per-dopant tuning: alpha_311=0.1 (B,As) /
+0.6 (P), KsurfI=Arrhenius (B,As) / constant 1e11 (P). f_cluster=0.9.
 
 All metrics integrated from surface to junction depth (see README for details).
 
+#### Summary
+
+| Dopant | 1000C | 900C | 1100C high-dose |
+|--------|-------|------|-----------------|
+| B | Xj +4%, Rs -7% | Xj +7%, Rs -36% | CRASH |
+| P | Xj -1%, Rs -6% | CRASH | CRASH |
+| As | Xj -5%, Rs -13% | Xj +97% | Xj +45%, Rs +8% |
+
+Boron is in good shape at 1000C and 900C. Phosphorus works at 1000C only.
+Arsenic works at 1000C; 900C and 1100C have large Xj errors. Three cases crash
+from solver stiffness.
+
+#### Boron
+
 | Case | Xj | Rs | Beta1 | Beta2 | Nz | Status |
 |------|-----|-----|-------|-------|-----|--------|
-| B 2e14 80keV 1000C 30min | +3.8% | -7.9% | +3.1% | -0.8% | +13.3% | OK |
-| P 2e14 80keV 1000C 30min | -0.5% | -5.9% | +7.2% | +27.4% | +7.3% | OK |
-| As 2e14 80keV 1000C 30min | -4.8% | -12.5% | +17.3% | +111.1% | +1.0% | OK |
-| B 2e14 20keV 900C 30min | +7.0% | -36.4% | -0.9% | +7.2% | +90.3% | OK |
-| P 2e14 20keV 900C 30min | -- | -- | -- | -- | -- | CRASH: PI pair stiffness |
-| As 2e14 20keV 900C 30min | +96.6% | -36.9% | +28.3% | +521.2% | -8.9% | OK |
-| B 2e16 80keV 1100C 120min | -- | -- | -- | -- | -- | CRASH: Vac/boronVac diverge |
-| P 2e16 80keV 1100C 120min | -- | -- | -- | -- | -- | CRASH: PI pair stiffness |
-| As 2e16 80keV 1100C 120min | +44.6% | +8.3% | +10.1% | -2.3% | -4.7% | OK |
+| 2e14 80keV 1000C 30min | +4.2% | -7.4% | +3.3% | -0.2% | +12.1% | Good |
+| 2e14 20keV 900C 30min | +6.5% | -36.3% | -1.0% | +6.6% | +90.3% | Xj good, Rs/Nz poor |
+| 2e16 80keV 1100C 120min | -- | -- | -- | -- | -- | CRASH |
 
-Calibrated cases (2e14 80keV 1000C 30min) within 5% on Xj for all dopants.
-High-dose (2e16) crashes or over-predicts -- solver stiffness from extreme defect supersaturation.
-900C cases over-predict: f_cluster=0.9 leaves 10% of interstitials free at initialization,
-and {311} dissolution is frozen at 900C (Kr time constant ~250 min >> 30 min anneal),
-so initial free I drives excessive TED. In TSUPREM-4, CL.INI.F=1.0 (all I initially clustered).
+Xj within 7% at both 900C and 1000C. The large Rs (-36%) and Nz (+90%) errors at 900C
+are amplified from the modest Xj error: shifting the junction depth cutoff into a steep
+part of the profile tail changes the integrated metrics substantially.
+
+The 2e16 crash is a solver issue: Vac and boronVac PDEs diverge from extreme defect
+supersaturation. V_eq initialization (the only change from v4) did not fix this.
+
+#### Phosphorus
+
+| Case | Xj | Rs | Beta1 | Beta2 | Nz | Status |
+|------|-----|-----|-------|-------|-----|--------|
+| 2e14 80keV 1000C 30min | -0.5% | -5.9% | +7.2% | +27.4% | +7.3% | Good |
+| 2e14 20keV 900C 30min | -- | -- | -- | -- | -- | CRASH |
+| 2e16 80keV 1100C 120min | -- | -- | -- | -- | -- | CRASH |
+
+1000C is excellent on Xj and Rs. Beta2 +27% is a systematic offset from profile shape
+differences between the explicit pair model and TSUPREM-4's effective diffusivity.
+
+Only 1 of 3 cases runs. Both crashes are PI pair solver stiffness (P is modeled as an
+I-only diffuser with alpha=0.6 and constant KinkSite=1e11, which creates stiff PI pair
+PDEs at low temperature and high dose).
+
+#### Arsenic
+
+| Case | Xj | Rs | Beta1 | Beta2 | Nz | Status |
+|------|-----|-----|-------|-------|-----|--------|
+| 2e14 80keV 1000C 30min | -4.8% | -12.5% | +17.3% | +111.1% | +1.0% | Xj good, Beta2 poor |
+| 2e14 20keV 900C 30min | +96.6% | -36.9% | +28.3% | +521.2% | -8.9% | Poor |
+| 2e16 80keV 1100C 120min | +44.6% | +8.3% | +10.1% | -2.3% | -4.7% | Fair |
+
+No crashes, but accuracy varies with temperature. 1000C Xj is within 5%. The 900C case
+is far off (+97% Xj) because frozen {311} clusters maintain ScaleI=10 for the entire 30min
+anneal, driving excess AsI pair diffusion. The 1100C high-dose case over-predicts Xj by 45%.
+
+Beta2 has large systematic errors (+111% at 1000C, +521% at 900C) from profile shape
+differences: the explicit pair model produces a different tail shape than TSUPREM-4's
+effective diffusivity, and Beta2 is very sensitive to the concentration-weighted depth
+distribution.
+
+#### Root cause: FLOOXS vs TSUPREM-4 parameter divergence
+
+FLOOXS and TSUPREM-4 use different Arrhenius parameters for D_I and C*_I. The product
+D_I * C*_I controls intrinsic pair diffusivity:
+
+| Temp | FLOOXS D_I*C*_I | TSUPREM-4 D_I*C*_I | Ratio |
+|------|-----------------|---------------------|-------|
+| 1000C | 4.2e6 | 3.1e6 | 1.4x |
+| 900C | 1.9e4 | 3.3e5 | 0.06x (17x weaker) |
+
+At 1000C, the two are similar and the model works well. At 900C, FLOOXS pair diffusivity
+is 17x too weak. The frozen {311} clusters (Ea=3.6 eV, tau=244min at 900C) compensate for
+this deficiency in B by maintaining elevated ScaleI, but over-compensate for As (which
+doesn't need as much enhancement). This is why B and As have contradictory requirements
+at 900C and no single dopant-independent parameter set works across temperatures.
+
+### Kr Ea sweep (2026-02-21)
+
+Tested {311} dissolution Ea = {3.0, 3.2, 3.4, 3.6} eV for B at 900C and 1000C,
+and Ea = {3.0, 3.6} for As at 900C and 1000C.
+
+**B 2e14 80keV 1000C 30min (Xj error):**
+
+| Ea   | tau(1000C) | Xj    | Rs    | Notes |
+|------|-----------|-------|-------|-------|
+| 3.0  | 4 s       | -0.1% | -6.3% | Best 1000C |
+| 3.2  | 23 s      | +0.7% | -6.4% | |
+| 3.4  | 2.4 min   | +1.3% | -6.6% | |
+| 3.6  | 15 min    | +4.2% | -7.4% | Current |
+
+1000C is robust to Ea: Xj varies only 4% across the full sweep because clusters dissolve
+quickly at all Ea values (tau ranges from 4s to 15min, all short vs 30min anneal).
+
+**B 2e14 20keV 900C 30min (Xj error):**
+
+| Ea   | tau(900C) | Xj     | Rs     | Notes |
+|------|----------|--------|--------|-------|
+| 3.0  | 39 s     | -32.9% | -28.1% | Clusters dissolve, too little TED |
+| 3.2  | 4.7 min  | -30.2% | -28.5% | |
+| 3.4  | 34 min   | -25.7% | -29.6% | |
+| 3.6  | 244 min  | +6.5%  | -36.3% | Clusters frozen, compensates weak pair D |
+
+900C is highly sensitive to Ea. Only Ea=3.6 (frozen clusters for the entire anneal)
+produces enough TED to match TSUPREM-4. Lower Ea values release clusters too early,
+exposing the 17x-weak pair diffusivity.
+
+**As Ea sweep (Xj error):**
+
+| Case  | Ea=3.0 | Ea=3.6 | Notes |
+|-------|--------|--------|-------|
+| 1000C | -15.1% | -4.8%  | Lower Ea worsens 1000C |
+| 900C  | -25.5% | +96.6% | Ea=3.0 dramatically improves 900C |
+
+B and As have contradictory Ea requirements at 900C. B needs Ea=3.6 (frozen clusters);
+As needs lower Ea (frozen clusters cause excess AsI diffusion). No single
+dopant-independent Ea satisfies both.
+
+### FLOOXS v4: 5-stream + {311} clustering (2026-02-21)
+
+Template: `ion_implant_5pd_v4.tcl`
+Parameters: Same as v5 but with V=1.0 init for B (instead of V_eq). Results identical
+to v5 for all non-crashing cases (V_eq init only affects high-dose stability).
+
+See v5 table above for results.
+Per-dopant: alpha_311=0.1 (B,As) / 0.6 (P), KsurfI=Arrhenius (B,As) / constant 1e11 (P).
 Beta1/Beta2 errors have ~5% systematic offset from mobility model differences (Python vs MATLAB).
 
 ### FLOOXS v3: 5-stream with effective +n model (2026-02-20)

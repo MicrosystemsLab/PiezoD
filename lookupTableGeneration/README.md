@@ -56,7 +56,7 @@ Generate a test script from a template and run it:
 
 ```bash
 cd lookupTableGeneration
-bash scripts/gen_test.sh boron 2e14 80 1000 30 templates/ion_implant_5pd.tcl > simulations/test.tcl
+bash scripts/gen_test.sh boron 2e14 80 1000 30 templates/ion_implant_5pd_v5.tcl > simulations/test.tcl
 MSYS_NO_PATHCONV=1 docker compose run --rm flooxs /work/test.tcl
 ```
 
@@ -70,7 +70,9 @@ Input/output files go in `simulations/` which is mounted into the container.
 
 | Template | Model | Status |
 |----------|-------|--------|
-| `ion_implant_5pd.tcl` | 5-stream pair diffusion + {311} clustering (all dopants) | Primary, used for lookup tables |
+| `ion_implant_5pd_v5.tcl` | 5-stream + {311}, FLOOXS params, V_eq init | Primary |
+| `ion_implant_5pd_v4.tcl` | 5-stream + {311}, FLOOXS params | Superseded by v5 |
+| `ion_implant_5pd.tcl` | 5-stream + {311}, TSUPREM-4 Appendix A params | Experimental |
 | `ion_implant_ted.tcl` | 5-stream pair diffusion, no {311} | Reference (under-predicts Xj) |
 | `ion_implant_ted_qss.tcl` | QSS/Fermi hybrid | Superseded by 5pd |
 | `ion_implant_fermi.tcl` | Fermi-level dependent diffusion, no TED | Baseline (no TED physics) |
@@ -86,7 +88,9 @@ lookupTableGeneration/
 ├── Dockerfile.2024, docker-compose.2024.yml # FLOOXS_2024
 ├── FLOOXS_2024/, FLOOXS_2026/               # Source (gitignored)
 ├── templates/                               # Parameterized .tcl files (${dopant}, ${dose}, etc.)
-│   ├── ion_implant_5pd.tcl                  # 5-stream + {311} clustering (primary)
+│   ├── ion_implant_5pd_v5.tcl                # 5-stream + {311} clustering (primary)
+│   ├── ion_implant_5pd_v4.tcl                # 5-stream + {311} (superseded by v5)
+│   ├── ion_implant_5pd.tcl                   # 5-stream + {311}, TSUPREM-4 params (experimental)
 │   ├── ion_implant_ted.tcl                  # 5-stream pair diffusion (no {311})
 │   ├── ion_implant_ted_qss.tcl              # QSS/Fermi hybrid (superseded)
 │   ├── ion_implant_fermi.tcl                # Fermi-level diffusion (no TED)
