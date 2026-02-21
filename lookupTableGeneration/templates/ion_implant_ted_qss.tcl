@@ -1,5 +1,5 @@
 # Ion implantation and diffusion simulation for PiezoD lookup tables
-# FLOOXS QSS model: quasi-steady-state pair diffusion for B, P, As
+# FLOOXS QSS/Fermi hybrid model
 #
 # Parameters:
 #   ${dopant}      - boron, phosphorus, or arsenic
@@ -9,22 +9,29 @@
 #   ${time}        - anneal time (minutes)
 #
 # Physics:
-#   - Fermi-level dependent dopant diffusivity (same as fermi model)
-#   - Enhanced by ScaleInter = I/I* from explicit interstitial transport
-#   - Quasi-steady-state pair approximation: pairs in local equilibrium,
-#     folded into ScaleI/ScaleV multipliers on dopant diffusivity
-#   - V assumed at equilibrium (ScaleVac = 1): implant creates I, not V
-#   - Per-dopant effective diffusivity:
-#       Boron:      D = D_I(Poni) * ScaleI + D_V(Poni) (B-V floor stabilizes solver)
-#       Phosphorus: D = D_P(Noni) * (fI*ScaleI + 1-fI), fI(C) = 0.17..1.0
-#                   (concentration-dependent fI: Jones/LBL kink-and-tail model)
-#       Arsenic:    D = D_I + D_V(Noni) (fermi-equivalent, As-I binding=0 eV)
-#   - Solved variables: 2 (dopant + Inter) for all dopants
-#   - Background doping (~1.4e15 cm^-3, 10 ohm-cm)
-#   - 250A protection oxide matching TSUPREM-4
-#   - Temperature ramp matching TSUPREM-4
+#   Boron: QSS pair diffusion with explicit interstitial transport
+#     - D_eff = D_I(Poni) * ScaleI + D_V(Poni)
+#     - ScaleInter = I/I* from solved interstitial PDE
+#     - D_V floor stabilizes solver; 2 solved variables (B + Inter)
+#   Phosphorus: Fermi-level dependent diffusivity (no TED)
+#     - D_eff = D0 + Dn*Noni + Dnn*Noni^2
+#     - Inter PDE too stiff at high dose (2e16); fermi-only converges everywhere
+#     - 1 solved variable (P only)
+#   Arsenic: QSS pair diffusion with explicit interstitial transport (ScaleV=1)
+#     - D_eff = D_I * ScaleI + D_V(Noni)
+#     - ScaleInter = I/I* from solved interstitial PDE; V at equilibrium
+#     - 2 solved variables (As + Inter)
 #
+# Background doping: ~1.4e15 cm^-3, 10 ohm-cm
+# 250A protection oxide matching TSUPREM-4
+# Temperature ramp matching TSUPREM-4
 # All parameters from FLOOXS_2026/Params/Silicon/
+#
+# QSS P model (for reference, not used due to Inter PDE stiffness at high dose):
+#   Solved 2 variables (P + Inter). ScaleInter soft-capped via Michaelis-Menten
+#   (Smax * Inter / (Smax * EqInter + Inter - EqInter)) to bound enhancement.
+#   With fI=0.2: D_eff = D_P(Noni) * (0.2*ScaleInter + 0.8).
+#   Converges at 2e14 (Smax=5000 gives -7% vs TSUPREM-4) but diverges at 2e16.
 
 math diffuse dim=1 umf none col scale
 
@@ -85,38 +92,63 @@ pdbSetDouble Math rhsMin 1e-2
 set ni "(3.87e16 * sqrt((Temp+273.0)*(Temp+273.0)*(Temp+273.0)) * exp(-7014.0/(Temp+273.0)))"
 
 # =============================================================================
-# 6. POINT DEFECT PARAMETERS
+# 6. POINT DEFECT PARAMETERS (boron and arsenic QSS)
 # Source: FLOOXS_2026/Params/Silicon/Interstitial, Vacancy, Info
 # =============================================================================
 
-set lattice 2.714417617e-8
+switch ${dopant} {
+    boron {
+        set lattice 2.714417617e-8
 
-# Equilibrium interstitial concentration and charge states
-pdbSetDouble Silicon Inter Cstar {[Arrhenius 3.6484e27 3.7]}
-set cis [pdbDelayDouble Silicon Inter Cstar]
+        # Equilibrium interstitial concentration and charge states
+        pdbSetDouble Silicon Inter Cstar {[Arrhenius 3.6484e27 3.7]}
+        set cis [pdbDelayDouble Silicon Inter Cstar]
 
-pdbSetDouble Silicon Inter neutral 1.0
-pdbSetDouble Silicon Inter negative {[Arrhenius 5.68 0.48]}
-pdbSetDouble Silicon Inter positive {[Arrhenius 5.68 0.42]}
-set Ineu [pdbDelayDouble Silicon Inter neutral]
-set Ineg [pdbDelayDouble Silicon Inter negative]
-set Ipos [pdbDelayDouble Silicon Inter positive]
-set IdenI "($Ineu + $Ineg + $Ipos)"
+        pdbSetDouble Silicon Inter neutral 1.0
+        pdbSetDouble Silicon Inter negative {[Arrhenius 5.68 0.48]}
+        pdbSetDouble Silicon Inter positive {[Arrhenius 5.68 0.42]}
+        set Ineu [pdbDelayDouble Silicon Inter neutral]
+        set Ineg [pdbDelayDouble Silicon Inter negative]
+        set Ipos [pdbDelayDouble Silicon Inter positive]
+        set IdenI "($Ineu + $Ineg + $Ipos)"
 
-# Interstitial diffusivity
-pdbSetDouble Silicon Inter Diff {[Arrhenius 0.138 1.37]}
-set DiffI [pdbDelayDouble Silicon Inter Diff]
+        # Interstitial diffusivity
+        pdbSetDouble Silicon Inter Diff {[Arrhenius 0.138 1.37]}
+        set DiffI [pdbDelayDouble Silicon Inter Diff]
 
-# Surface recombination coefficient
-set KsurfI "(3.14159*$DiffI*$lattice*1.3e15)"
+        # Surface recombination: temperature-dependent KinkSite via Temp variable
+        set KinkI "(0.51 * exp(2.63 / (8.617e-5 * (Temp + 273.15))))"
+        set KsurfI "(3.14159*$DiffI*$lattice*$KinkI)"
+    }
+    arsenic {
+        set lattice 2.714417617e-8
+
+        # Equilibrium interstitial concentration and charge states
+        pdbSetDouble Silicon Inter Cstar {[Arrhenius 3.6484e27 3.7]}
+        set cis [pdbDelayDouble Silicon Inter Cstar]
+
+        pdbSetDouble Silicon Inter neutral 1.0
+        pdbSetDouble Silicon Inter negative {[Arrhenius 5.68 0.48]}
+        pdbSetDouble Silicon Inter positive {[Arrhenius 5.68 0.42]}
+        set Ineu [pdbDelayDouble Silicon Inter neutral]
+        set Ineg [pdbDelayDouble Silicon Inter negative]
+        set Ipos [pdbDelayDouble Silicon Inter positive]
+        set IdenI "($Ineu + $Ineg + $Ipos)"
+
+        # Interstitial diffusivity
+        pdbSetDouble Silicon Inter Diff {[Arrhenius 0.138 1.37]}
+        set DiffI [pdbDelayDouble Silicon Inter Diff]
+
+        # Surface recombination: temperature-dependent KinkSite via Temp variable
+        set KinkI "(0.51 * exp(2.63 / (8.617e-5 * (Temp + 273.15))))"
+        set KsurfI "(3.14159*$DiffI*$lattice*$KinkI)"
+    }
+}
 
 # =============================================================================
-# 7. PER-DOPANT DIFFUSIVITY (split I and V components)
+# 7. PER-DOPANT DIFFUSIVITY PARAMETERS
 # Source: FLOOXS_2026/Params/Silicon/{Dopant}/Interstitial, Vacancy
 # =============================================================================
-#
-# QSS: D_eff = D_I_components * ScaleInter + D_V_components * 1
-# The I-component gets enhanced by ScaleI; V-component stays at equilibrium.
 
 switch ${dopant} {
     boron {
@@ -128,16 +160,15 @@ switch ${dopant} {
         pdbSetDouble Silicon boron DV_Dp {[Arrhenius 0.154 3.56]}
     }
     phosphorus {
-        # P-I path (I-only diffuser, Fi=1.0):
-        # D0=Arr(5.6,3.71), Dn=Arr(6.38,4.05), Dnn=Arr(0.0245,3.23)
-        pdbSetDouble Silicon phosphorus DI_D0 {[Arrhenius 5.6 3.71]}
-        pdbSetDouble Silicon phosphorus DI_Dn {[Arrhenius 6.38 4.05]}
-        pdbSetDouble Silicon phosphorus DI_Dnn {[Arrhenius 2.45e-2 3.23]}
+        # P: I-only diffuser, combined D0+Dn+Dnn (fermi model)
+        pdbSetDouble Silicon phosphorus Diff_D0 {[Arrhenius 5.6 3.71]}
+        pdbSetDouble Silicon phosphorus Diff_Dn {[Arrhenius 6.38 4.05]}
+        pdbSetDouble Silicon phosphorus Diff_Dnn {[Arrhenius 2.45e-2 3.23]}
     }
     arsenic {
-        # As-I path: D0=Arr(0.0666,3.45) (weak, neutral only)
+        # As-I path: D0=Arr(0.0666,3.45)
         pdbSetDouble Silicon arsenic DI_D0 {[Arrhenius 0.0666 3.45]}
-        # As-V path: Dn=Arr(12.8,4.05) (dominant, electron-enhanced)
+        # As-V path: Dn=Arr(12.8,4.05)
         pdbSetDouble Silicon arsenic DV_Dn {[Arrhenius 12.8 4.05]}
     }
 }
@@ -146,9 +177,15 @@ switch ${dopant} {
 # 8. SOLUTION DEFINITIONS
 # =============================================================================
 
-# 2 solved variables for all dopants: dopant + Inter
 solution name=${dopant} solve !negative
-solution name=Inter solve !negative add
+switch ${dopant} {
+    boron {
+        solution name=Inter solve !negative add
+    }
+    arsenic {
+        solution name=Inter solve !negative add
+    }
+}
 
 # Fermi level
 solution name = Charge add const val = 0.0 Silicon
@@ -156,19 +193,46 @@ solution name = Noni add const val = "0.5*(Charge + sqrt(Charge*Charge + 4.0*$ni
 solution name = Poni add const val = "0.5*(-Charge + sqrt(Charge*Charge + 4.0*$ni*$ni)) / $ni" Silicon
 
 # =============================================================================
-# 9. INITIALIZATION
+# 9. INITIALIZATION (QSS: Inter from implant, effective +n model)
 # =============================================================================
 
-# I from implant (+1 model: each implanted ion creates one interstitial)
-sel z=${dopant} name=Inter
+# Effective +n model (Hobler-Moroz, TSUPREM-4 manual Eq 3-534)
+# f_pl = 1 + D.PHDF * m^D.PME * E^(D.PLF * m^D.PLME)
+# Default params: D.PHDF=0.0905, D.PME=0.85, D.PLF=-2, D.PLME=-0.5
+switch ${dopant} {
+    boron       { set mass 10.81 }
+    phosphorus  { set mass 30.97 }
+    arsenic     { set mass 74.92 }
+}
+set lambda_inf [expr {-2.0 * pow($mass, -0.5)}]
+set f_pl [expr {1.0 + 0.0905 * pow($mass, 0.85) * pow(${energy}, $lambda_inf)}]
+puts "f_pl ($mass amu, ${energy} keV) = $f_pl"
+
+switch ${dopant} {
+    boron {
+        sel z=$f_pl*${dopant} name=Inter
+    }
+    arsenic {
+        sel z=$f_pl*${dopant} name=Inter
+    }
+}
 
 # =============================================================================
-# 10. EQUILIBRIUM INTERSTITIALS (Fermi-level dependent)
+# 10. EQUILIBRIUM INTERSTITIALS (boron and arsenic QSS)
 # =============================================================================
 
-set InumI "($Ineu + Noni*$Ineg + Poni*$Ipos)"
-term name = EqInter add eqn = "$cis * $InumI / $IdenI" Silicon
-term name = ScaleInter add eqn = "Inter/EqInter" Silicon
+switch ${dopant} {
+    boron {
+        set InumI "($Ineu + Noni*$Ineg + Poni*$Ipos)"
+        term name = EqInter add eqn = "$cis * $InumI / $IdenI" Silicon
+        term name = ScaleInter add eqn = "Inter/EqInter" Silicon
+    }
+    arsenic {
+        set InumI "($Ineu + Noni*$Ineg + Poni*$Ipos)"
+        term name = EqInter add eqn = "$cis * $InumI / $IdenI" Silicon
+        term name = ScaleInter add eqn = "Inter/EqInter" Silicon
+    }
+}
 
 # =============================================================================
 # 11. CHARGE NEUTRALITY
@@ -189,68 +253,66 @@ switch ${dopant} {
 # =============================================================================
 # 12. DOPANT DIFFUSIVITY AND EQUATION
 # =============================================================================
-#
-# QSS pair approximation: D_eff = D_I * ScaleInter + D_V * 1
-# Flux = D_eff / chg * grad(C * chg)
-#   chg = Poni (acceptors) or Noni (donors)
 
 switch ${dopant} {
     boron {
+        # QSS: D_eff = D_I * ScaleInter + D_V (V at equilibrium)
         set D0_I [pdbDelayDouble Silicon boron DI_D0]
         set Dp_I [pdbDelayDouble Silicon boron DI_Dp]
         set D0_V [pdbDelayDouble Silicon boron DV_D0]
         set Dp_V [pdbDelayDouble Silicon boron DV_Dp]
-        # D_eff = (D0_I + Dp_I*Poni)*ScaleI + (D0_V + Dp_V*Poni)
         term name = DiffDop add eqn = "(($D0_I + $Dp_I * Poni) * ScaleInter + ($D0_V + $Dp_V * Poni)) / Poni" Silicon
         pdbSetString Silicon boron Equation \
             "ddt(boron) - DiffDop * grad(boron * Poni)"
     }
     phosphorus {
-        set D0_I [pdbDelayDouble Silicon phosphorus DI_D0]
-        set Dn_I [pdbDelayDouble Silicon phosphorus DI_Dn]
-        set Dnn_I [pdbDelayDouble Silicon phosphorus DI_Dnn]
-        # Concentration-dependent fractional interstitial (Jones/LBL):
-        #   fI -> 1.0 at C << ni (intrinsic, full TED)
-        #   fI -> 0.17 at C >> ni (extrinsic, PV- E-centers dominate)
-        # D_eff = D_P * (fI * ScaleI + (1 - fI))
-        term name = FracI add eqn = "0.17 + 0.83 / (1.0 + phosphorus / $ni)" Silicon
-        term name = DiffDop add eqn = "($D0_I + $Dn_I * Noni + $Dnn_I * Noni * Noni) * (FracI * ScaleInter + 1.0 - FracI) / Noni" Silicon
+        # Fermi: D_eff = D0 + Dn*Noni + Dnn*Noni^2
+        set D0 [pdbDelayDouble Silicon phosphorus Diff_D0]
+        set Dn [pdbDelayDouble Silicon phosphorus Diff_Dn]
+        set Dnn [pdbDelayDouble Silicon phosphorus Diff_Dnn]
+        term name = DiffDop add eqn = "($D0 + $Dn * Noni + $Dnn * Noni * Noni) / Noni" Silicon
         pdbSetString Silicon phosphorus Equation \
             "ddt(phosphorus) - DiffDop * grad(phosphorus * Noni)"
     }
     arsenic {
+        # QSS: D_eff = D_I * ScaleInter + D_V(Noni) (ScaleV=1)
         set D0_I [pdbDelayDouble Silicon arsenic DI_D0]
         set Dn_V [pdbDelayDouble Silicon arsenic DV_Dn]
-        # As-I binding = 0 eV: pairs dissolve in ~6 ns, never reach QSS.
-        # ScaleI enhancement is invalid for As. Use equilibrium diffusivity.
-        # D_eff = D0_AsI + Dn_AsV * Noni (same as fermi model)
-        term name = DiffDop add eqn = "($D0_I + $Dn_V * Noni) / Noni" Silicon
+        term name = DiffDop add eqn = "($D0_I * ScaleInter + $Dn_V * Noni) / Noni" Silicon
         pdbSetString Silicon arsenic Equation \
             "ddt(arsenic) - DiffDop * grad(arsenic * Noni)"
     }
 }
 
 # =============================================================================
-# 13. INTERSTITIAL EQUATION
+# 13. INTERSTITIAL EQUATION (boron and arsenic QSS)
 # =============================================================================
 #
 # Defect transport with surface recombination as the sole I sink.
 # No I-V recombination (no V equation): surface recomb dominates for
-# near-surface implant damage. No dopant coupling: QSS pairs don't
-# create net I source/sink terms.
+# near-surface implant damage.
 
-pdbSetString Silicon Inter Equation \
-    "ddt(Inter) - $DiffI*EqInter*grad(ScaleInter)"
+switch ${dopant} {
+    boron {
+        pdbSetString Silicon Inter Equation \
+            "ddt(Inter) - $DiffI*EqInter*grad(ScaleInter)"
+
+        # Surface recombination BC
+        set EqI_surf "($cis * $InumI / $IdenI)"
+        pdbSetString Oxide_Silicon Inter Silicon Equation "-$KsurfI*(Inter(Silicon) - $EqI_surf)"
+    }
+    arsenic {
+        pdbSetString Silicon Inter Equation \
+            "ddt(Inter) - $DiffI*EqInter*grad(ScaleInter)"
+
+        # Surface recombination BC
+        set EqI_surf "($cis * $InumI / $IdenI)"
+        pdbSetString Oxide_Silicon Inter Silicon Equation "-$KsurfI*(Inter(Silicon) - $EqI_surf)"
+    }
+}
 
 # =============================================================================
-# 14. SURFACE RECOMBINATION BC
-# =============================================================================
-
-set EqI_surf "($cis * $InumI / $IdenI)"
-pdbSetString Oxide_Silicon Inter Silicon Equation "-$KsurfI*(Inter(Silicon) - $EqI_surf)"
-
-# =============================================================================
-# 15. PRE-ANNEAL OUTPUT
+# 14. PRE-ANNEAL OUTPUT
 # =============================================================================
 
 puts "=== PRE-ANNEAL ==="
@@ -263,22 +325,7 @@ foreach v [print.1d] {
 }
 
 # =============================================================================
-# 16. PER-DOPANT SOLVER TUNING
-# =============================================================================
-#
-# B: well-conditioned (D_V floor), tight tolerance OK
-# P: stiffer (concentration-dependent fI provides partial floor),
-#    slightly relaxed updateLimit for faster timestep growth
-# As: fermi-equivalent (no ScaleI coupling), default settings
-
-switch ${dopant} {
-    phosphorus {
-        pdbSetDouble Math updateLimit 1e-6
-    }
-}
-
-# =============================================================================
-# 17. ANNEAL SEQUENCE (matches TSUPREM-4)
+# 15. ANNEAL SEQUENCE (matches TSUPREM-4)
 # =============================================================================
 
 set ramprate [expr {(${temp} - 800.0) / 2700.0}]
@@ -293,7 +340,7 @@ puts "=== RAMP DOWN: 45 min, ${temp}C -> 800C ==="
 diffuse time=45 temp=${temp} ramprate=-$ramprate init=1e-6 damp.trbdf
 
 # =============================================================================
-# 18. POST-ANNEAL OUTPUT
+# 16. POST-ANNEAL OUTPUT
 # =============================================================================
 
 puts "=== POST-ANNEAL ==="
@@ -305,18 +352,33 @@ foreach v [print.1d] {
     puts "$d $c"
 }
 
-puts "=== POST-ANNEAL INTERSTITIALS ==="
-sel z=Inter
-foreach v [print.1d] {
-    lassign $v d c
-    if {$c == "Value"} continue
-    if {$d < 0} continue
-    if {$d > 0.5} break
-    puts "$d $c"
+switch ${dopant} {
+    boron {
+        puts "=== POST-ANNEAL INTERSTITIALS ==="
+        sel z=Inter
+        foreach v [print.1d] {
+            lassign $v d c
+            if {$c == "Value"} continue
+            if {$d < 0} continue
+            if {$d > 0.5} break
+            puts "$d $c"
+        }
+    }
+    arsenic {
+        puts "=== POST-ANNEAL INTERSTITIALS ==="
+        sel z=Inter
+        foreach v [print.1d] {
+            lassign $v d c
+            if {$c == "Value"} continue
+            if {$d < 0} continue
+            if {$d > 0.5} break
+            puts "$d $c"
+        }
+    }
 }
 
 # =============================================================================
-# 19. JUNCTION DEPTH
+# 17. JUNCTION DEPTH
 # =============================================================================
 
 sel z=${dopant}-1.4e15

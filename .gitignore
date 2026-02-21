@@ -54,10 +54,12 @@ nul
 # TCAD tools (require registration, cannot redistribute)
 lookupTableGeneration/FLOOXS_*/
 
-# Downloaded documentation
+# Downloaded documentation and manuals
 lookupTableGeneration/www.flooxs.ece.ufl.edu/
+lookupTableGeneration/manuals/
 
-# TCAD simulation outputs (keep .gitkeep and templates)
+# TCAD simulation outputs
+lookupTableGeneration/simulations/*.tcl
 lookupTableGeneration/simulations/*.out
 lookupTableGeneration/simulations/*.log
 lookupTableGeneration/simulations/*.str
