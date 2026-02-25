@@ -1,8 +1,6 @@
 # Lookup Table Generation
 
-**Archived** -- FLOOXS evaluation concluded, not viable for production use. See [docs/status.md](docs/status.md) for details.
-
-Generate dopant profile lookup tables for PiezoD using FLOOXS TCAD process simulation.
+PiezoD uses a TSUPREM-4-generated lookup table for dopant profiles (`lookupTable.mat` -> `ionImplantLookupTable.h5`). This directory contains an attempt to replace TSUPREM-4 with FLOOXS (open-source TCAD). The attempt failed due to fundamental parameter and solver issues. See [docs/status.md](docs/status.md) for the full evaluation.
 
 ## Prerequisites
 

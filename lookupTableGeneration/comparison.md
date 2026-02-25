@@ -1,5 +1,7 @@
 # FLOOXS vs TSUPREM-4 Comparison
 
+Validation data from the FLOOXS evaluation attempt. FLOOXS was not viable -- see [docs/status.md](docs/status.md).
+
 ## How to generate comparison values
 
 ### TSUPREM-4 reference

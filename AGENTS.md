@@ -30,7 +30,7 @@ PiezoD/
 │   ├── tests/                   # Test suite
 │   ├── examples/                # Usage examples
 │   └── archive/                 # Legacy/experimental scripts
-├── lookupTableGeneration/       # FLOOXS TCAD simulation (Docker)
+├── lookupTableGeneration/       # FLOOXS TCAD evaluation (archived, not viable)
 │   ├── Dockerfile               # FLOOXS build instructions
 │   ├── docker-compose.yml       # Container service definition
 │   ├── templates/               # FLOOXS simulation templates

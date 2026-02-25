@@ -1,8 +1,10 @@
 # Implementation Notes
 
-Lookup table generation uses FLOOXS, an open-source TCAD process simulator (Tcl-based, C++ solver), running in Docker. Our target is to match TSUPREM-4 (commercial TCAD) reference results, particularly for Transient Enhanced Diffusion (TED). See [../comparison.md](../comparison.md) for validation data.
+These notes document the FLOOXS evaluation attempt. FLOOXS is an open-source TCAD process simulator (Tcl-based, C++ solver) that we tried as a replacement for TSUPREM-4 (commercial TCAD). The evaluation failed -- see [status.md](status.md) for the conclusion and [../comparison.md](../comparison.md) for validation data.
 
-## Current model: 5-stream + {311} clustering (`ion_implant_5pd.tcl`)
+The production lookup table remains TSUPREM-4-generated (`lookupTable.mat` -> `ionImplantLookupTable.h5`).
+
+## 5-stream + {311} clustering (`ion_implant_5pd.tcl`)
 
 5-stream pair diffusion (explicit dopant-defect pairs) with {311} interstitial clustering for all dopants. All physics parameters from TSUPREM-4 manual Appendix A.
 
