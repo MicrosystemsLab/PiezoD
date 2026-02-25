@@ -158,7 +158,11 @@ As at 80 keV produces a narrow implant (Rp~0.05 um) giving ScaleInter_peak ~ 2.9
 
 ### FLOOXS built-in model procs
 
-FLOOXS has built-in Tcl procs (DopantPair, DopantReact) that implement TED physics. We cannot use them because the C++ expression parser crashes at solve time with Arrhenius expressions set up through the model proc pathway. The exact same expressions work in hand-written templates. All templates use hand-written equations.
+FLOOXS has built-in Tcl procs (`DopantBulk`, `DopantFermi`, `DopantConstant`, `Segregation`) for setting up diffusion equations. We investigated these thoroughly and found 3 C++ bugs in the expression parser / term infrastructure (`Reduce.cc`, `Generic.cc`) and 3 Tcl bugs in `Dopant.tcl` when used with the FLOOXS 2026 C++ PDB system. See [flooxs_bugs.md](flooxs_bugs.md) for details.
+
+After patching all 6 bugs, the built-in procs work for Fermi-level diffusion (tested with `ion_implant_builtin_fermi.tcl`). However, they do not implement TED physics (no pair diffusion, no {311} clustering, no point defect transport). The PDB parameter loading system is also broken: the old Tcl-array PDB is commented out in `FLOOXS.models`, and the new C++ PDB has no file-loading mechanism. All parameters must be set explicitly via `pdbSet` before calling any proc.
+
+All templates use hand-written equations.
 
 ### {311} solver stability (historical)
 

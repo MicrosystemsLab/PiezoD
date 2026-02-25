@@ -1,5 +1,7 @@
 # Lookup Table Generation
 
+**Archived** -- FLOOXS evaluation concluded, not viable for production use. See [docs/status.md](docs/status.md) for details.
+
 Generate dopant profile lookup tables for PiezoD using FLOOXS TCAD process simulation.
 
 ## Prerequisites
@@ -21,7 +23,7 @@ Two versions are supported with separate templates:
 | FLOOXS_2026 | `Dockerfile`, `docker-compose.yml` |
 | FLOOXS_2024 | `Dockerfile.2024`, `docker-compose.2024.yml` |
 
-No patches to the FLOOXS source code are required. All templates use stock FLOOXS features.
+Three C++ bugs and three Tcl bugs were found and patched. See [docs/flooxs_bugs.md](docs/flooxs_bugs.md) for details.
 
 ### FLOOXS Documentation
 
@@ -70,15 +72,21 @@ Input/output files go in `simulations/` which is mounted into the container.
 
 | Template | Model | Status |
 |----------|-------|--------|
-| `ion_implant_5pd_v5.tcl` | 5-stream + {311}, FLOOXS params, V_eq init | Primary |
+| `ion_implant_eff_v4.tcl` | Effective D, FLOOXS pair D, ScaleInter cap, 10um mesh | Best stability (6/6 B) |
+| `ion_implant_eff_v3.tcl` | Effective D, Table A-3 D, IV relaxation | Best low-dose B accuracy |
+| `ion_implant_eff_v2.tcl` | Effective D, FLOOXS pair D, IV relaxation | Better high-dose stability |
+| `ion_implant_eff.tcl` | Effective D, Table A-3 D, no IV sink | First eff template |
+| `ion_implant_5pd_v5.tcl` | 5-stream + {311}, FLOOXS params, V_eq init | Best 1000C accuracy |
+| `ion_implant_5pd_v5_noVac.tcl` | 5-stream + {311}, no Vac PDE for B | Worse than v5 |
 | `ion_implant_5pd_v4.tcl` | 5-stream + {311}, FLOOXS params | Superseded by v5 |
-| `ion_implant_5pd.tcl` | 5-stream + {311}, TSUPREM-4 Appendix A params | Experimental |
-| `ion_implant_ted.tcl` | 5-stream pair diffusion, no {311} | Reference (under-predicts Xj) |
+| `ion_implant_5pd.tcl` | 5-stream + {311}, TSUPREM-4 Appendix A params | Failed (pair fraction) |
+| `ion_implant_ted.tcl` | 5-stream pair diffusion, no {311} | Under-predicts Xj |
 | `ion_implant_ted_qss.tcl` | QSS/Fermi hybrid | Superseded by 5pd |
-| `ion_implant_fermi.tcl` | Fermi-level dependent diffusion, no TED | Baseline (no TED physics) |
+| `ion_implant_builtin_fermi.tcl` | FLOOXS built-in model procs | Fermi only (no TED) |
+| `ion_implant_fermi.tcl` | Fermi-level dependent diffusion, no TED | Baseline |
 | `ion_implant_2024.tcl` | FLOOXS_2024 | Legacy |
 
-See [docs/implementation.md](docs/implementation.md) for physics details. See [comparison.md](comparison.md) for validation against TSUPREM-4.
+See [docs/implementation.md](docs/implementation.md) for physics details, [comparison.md](comparison.md) for validation against TSUPREM-4, and [docs/status.md](docs/status.md) for the evaluation conclusion.
 
 ## Structure
 
@@ -88,17 +96,30 @@ lookupTableGeneration/
 ├── Dockerfile.2024, docker-compose.2024.yml # FLOOXS_2024
 ├── FLOOXS_2024/, FLOOXS_2026/               # Source (gitignored)
 ├── templates/                               # Parameterized .tcl files (${dopant}, ${dose}, etc.)
-│   ├── ion_implant_5pd_v5.tcl                # 5-stream + {311} clustering (primary)
-│   ├── ion_implant_5pd_v4.tcl                # 5-stream + {311} (superseded by v5)
-│   ├── ion_implant_5pd.tcl                   # 5-stream + {311}, TSUPREM-4 params (experimental)
+│   ├── ion_implant_eff_v4.tcl               # Effective D, best stability
+│   ├── ion_implant_eff_v3.tcl               # Effective D, best low-dose B
+│   ├── ion_implant_eff_v2.tcl               # Effective D, FLOOXS pair D
+│   ├── ion_implant_eff.tcl                  # Effective D, Table A-3 D
+│   ├── ion_implant_5pd_v5.tcl               # 5-stream + {311}, best 1000C
+│   ├── ion_implant_5pd_v5_noVac.tcl         # 5-stream, no Vac (worse than v5)
+│   ├── ion_implant_5pd_v4.tcl               # 5-stream + {311} (superseded by v5)
+│   ├── ion_implant_5pd.tcl                  # 5-stream, TSUPREM-4 params (failed)
 │   ├── ion_implant_ted.tcl                  # 5-stream pair diffusion (no {311})
 │   ├── ion_implant_ted_qss.tcl              # QSS/Fermi hybrid (superseded)
-│   ├── ion_implant_fermi.tcl                # Fermi-level diffusion (no TED)
-│   └── ion_implant_2024.tcl                 # FLOOXS_2024 (legacy)
+│   ├── ion_implant_builtin_fermi.tcl        # FLOOXS built-in procs (Fermi only)
+│   ├── ion_implant_fermi.tcl                # Fermi-level diffusion (baseline)
+│   ├── ion_implant_2024.tcl                 # FLOOXS_2024 (legacy)
+│   └── Dopant_patched.tcl                   # Patched FLOOXS Dopant.tcl
 ├── scripts/                                 # Parameter substitution, run Docker, parse output
 │   └── gen_test.sh                          # Generate .tcl from template via sed
 ├── simulations/                             # Working directory mounted into Docker (gitignored)
-├── docs/                                    # Physics details, theory, implementation notes
+├── docs/                                    # Physics details, evaluation status, bug reports
+│   ├── status.md                            # Evaluation conclusion
+│   ├── flooxs_bugs.md                       # 6 bugs found and patched
+│   ├── implementation.md                    # Physics and equation details
+│   ├── eff_template_plan.md                 # Effective D derivation
+│   └── diffusion_theory.md                  # Background theory
+├── comparison.md                            # Validation data vs TSUPREM-4
 ├── simulation.template                      # TSUPREM-4 input template (legacy)
 ├── simulationControl.py                     # TSUPREM-4 batch runner (legacy)
 ├── lookupTable.mat                          # Generated lookup table data
