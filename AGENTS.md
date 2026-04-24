@@ -38,10 +38,9 @@ PiezoD/
 │   ├── simulations/             # Input/output directory
 │   ├── legacy/                  # TSUPREM-4 reference files
 │   └── lookupTable.mat          # Generated source data
-├── Docs/                        # Website (jemdoc)
-│   ├── html/                    # Generated HTML
-│   └── cgi-bin/                 # Download scripts
-└── Releases/                    # Version archives
+└── Docs/                        # Website (jemdoc)
+    ├── html/                    # Generated HTML
+    └── cgi-bin/                 # Download scripts
 ```
 
 ## Tech Stack
