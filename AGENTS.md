@@ -58,8 +58,6 @@ PiezoD/
 - Matlab
 	- Lint: `checkcode`
 	- Test: `runtests`
-- KLayout
-	- pcell: use python not ruby
 
 ## Commands
 
@@ -128,12 +126,6 @@ PiezoD/
 - No excessive bold in markdown; use styling selectively
 - No "last updated" dates or authorship
 - Commands on single line, not split across lines
-
-## Hardware
-
-- Read project-specific docs and datasheets before making suggestions
-- Use exact part numbers, not generic equivalents
-- Prioritize safety over convenience; err on side of caution
 
 ## Plotting
 
