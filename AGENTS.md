@@ -16,7 +16,9 @@ PiezoD/
 │   │   ├── cantileverPoly.m
 │   │   ├── ionImplantLookupTable.mat  # Ion implant lookup data
 │   │   └── sensorSimulation.mdl # Simulink model
-│   └── sampleCode.m             # Usage example
+│   ├── tests/                   # MATLAB test suite (4 cantilever*Test.m files)
+│   ├── sampleCode.m             # Usage example
+│   └── README.md
 ├── python/                      # Python port (in progress)
 │   ├── src/piezod/              # Core library
 │   │   ├── cantilever.py        # Base class
@@ -25,21 +27,24 @@ PiezoD/
 │   │   ├── cantilever_implantation.py
 │   │   ├── cantilever_piezoelectric.py
 │   │   ├── cantilever_poly.py
+│   │   ├── default.mplstyle
 │   │   └── data/                # Bundled data files
 │   │       ├── ionImplantLookupTable_tsuprem.h5
 │   │       └── ionImplantLookupTable_dopedealer.h5
-│   ├── tests/                   # Test suite
-│   ├── examples/                # Usage examples
-│   └── archive/                 # Legacy/experimental scripts
-├── lookupTableGeneration/       # FLOOXS TCAD evaluation (archived, not viable)
-│   ├── Dockerfile               # FLOOXS build instructions
-│   ├── docker-compose.yml       # Container service definition
-│   ├── templates/               # FLOOXS simulation templates
-│   ├── simulations/             # Input/output directory
-│   ├── legacy/                  # TSUPREM-4 reference files
-│   └── lookupTable.mat          # Generated source data
-└── Docs/
-    └── tutorial.md              # User-facing tutorial
+│   ├── tests/                   # pytest suite
+│   ├── examples/                # Usage examples (quickstart.py, etc.)
+│   ├── archive/                 # Legacy/experimental scripts
+│   ├── pyproject.toml
+│   └── README.md
+├── lookupTableGeneration/       # FLOOXS TCAD evaluation (archived, not viable
+│                                # as a TSUPREM-4 replacement). See its
+│                                # README.md and docs/status.md for details.
+├── docs/
+│   └── tutorial.md              # User-facing tutorial
+└── .github/workflows/           # CI and release automation
+    ├── ci.yml                   # Tests + lint on push/PR
+    ├── release.yml              # Bump version, create GitHub Release (manual)
+    └── publish.yml              # Build wheel, upload to PyPI (on release)
 ```
 
 ## Tech Stack
