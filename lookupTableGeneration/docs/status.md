@@ -40,7 +40,7 @@ The manual approach got close at 1000C (Xj within 4% for boron and phosphorus) b
 
 ## Decision
 
-FLOOXS is not viable for replacing TSUPREM-4 for lookup table generation. The existing TSUPREM-4-generated lookup table (`lookupTable.mat` -> `ionImplantLookupTable.h5`) remains the production data source.
+FLOOXS is not viable for replacing TSUPREM-4 for lookup table generation. The existing TSUPREM-4-generated lookup table (`lookupTable.mat` -> `ionImplantLookupTable_tsuprem.h5`) remains the production data source.
 
 ## Best results achieved
 

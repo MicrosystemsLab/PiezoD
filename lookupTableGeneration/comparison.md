@@ -6,11 +6,11 @@ Validation data from the FLOOXS evaluation attempt. FLOOXS was not viable -- see
 
 ### TSUPREM-4 reference
 
-Extract from the lookup table (`python/src/piezod/data/ionImplantLookupTable.h5`):
+Extract from the lookup table (`python/src/piezod/data/ionImplantLookupTable_tsuprem.h5`):
 
 ```python
 import h5py
-f = h5py.File('python/src/piezod/data/ionImplantLookupTable.h5', 'r')
+f = h5py.File('python/src/piezod/data/ionImplantLookupTable_tsuprem.h5', 'r')
 # Indices: [dopant, dose, energy, temp, time, oxidation]
 # dopant: B=0, P=1, As=2
 # dose: 2e14=0, 2e15=1, 2e16=2

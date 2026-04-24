@@ -26,7 +26,8 @@ PiezoD/
 │   │   ├── cantilever_piezoelectric.py
 │   │   ├── cantilever_poly.py
 │   │   └── data/                # Bundled data files
-│   │       └── ionImplantLookupTable.h5
+│   │       ├── ionImplantLookupTable_tsuprem.h5
+│   │       └── ionImplantLookupTable_dopedealer.h5
 │   ├── tests/                   # Test suite
 │   ├── examples/                # Usage examples
 │   └── archive/                 # Legacy/experimental scripts

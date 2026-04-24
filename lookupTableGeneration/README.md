@@ -1,6 +1,6 @@
 # Lookup Table Generation
 
-PiezoD uses a TSUPREM-4-generated lookup table for dopant profiles (`lookupTable.mat` -> `ionImplantLookupTable.h5`). This directory contains an attempt to replace TSUPREM-4 with FLOOXS (open-source TCAD). The attempt failed due to fundamental parameter and solver issues. See [docs/status.md](docs/status.md) for the full evaluation.
+PiezoD uses a TSUPREM-4-generated lookup table for dopant profiles (`lookupTable.mat` -> `ionImplantLookupTable_tsuprem.h5`). This directory contains an attempt to replace TSUPREM-4 with FLOOXS (open-source TCAD). The attempt failed due to fundamental parameter and solver issues. See [docs/status.md](docs/status.md) for the full evaluation.
 
 ## Prerequisites
 

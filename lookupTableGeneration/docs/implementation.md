@@ -2,7 +2,7 @@
 
 These notes document the FLOOXS evaluation attempt. FLOOXS is an open-source TCAD process simulator (Tcl-based, C++ solver) that we tried as a replacement for TSUPREM-4 (commercial TCAD). The evaluation failed -- see [status.md](status.md) for the conclusion and [../comparison.md](../comparison.md) for validation data.
 
-The production lookup table remains TSUPREM-4-generated (`lookupTable.mat` -> `ionImplantLookupTable.h5`).
+The production lookup table remains TSUPREM-4-generated (`lookupTable.mat` -> `ionImplantLookupTable_tsuprem.h5`).
 
 ## 5-stream + {311} clustering (`ion_implant_5pd.tcl`)
 

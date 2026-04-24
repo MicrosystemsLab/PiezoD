@@ -1,24 +1,30 @@
 """Cantilever with ion-implanted doping profile.
 
-Model an ion implanted cantilever using lookup tables from TSuprem.
-B, P and As are supported with either inert or oxidizing anneal environments.
+Model an ion implanted cantilever using lookup tables from process simulators.
+Two lookup table sources are supported:
 
-For all conditions, a 250A protection oxide layer is grown before the ion implantation.
+- "tsuprem4": TSUPREM-4 lookup table (ionImplantLookupTable_tsuprem.h5)
+  - Dopants: B, P, As
+  - Anneal types: "inert" (1), "oxide" (2)
+  - Energy: 20-80 keV, Dose: 2e14-2e16 cm^-2
+  - Temperature: 900-1100C, Time: 15-120 min
 
-After the implantation step:
+- "dopedealer": DopeDealer lookup table (ionImplantLookupTable_dopedealer.h5)
+  - Dopants: B, P, As
+  - Anneal types: "inert" (1), "dry_o2" (2), "wet_o2" (3)
+  - Energy: 10-120 keV, Dose: 1e13-8e16 cm^-2
+  - Temperature: 850-1100C, Time: 15-120 min
+
+For all conditions, a 250A protection oxide layer is grown before the ion
+implantation.
+
+After the implantation step (TSUPREM-4 table):
 - 'oxide' -> strip protection oxide, regrow 1500A oxide, inert anneal
 - 'inert' -> leave protection oxide, inert anneal, strip oxide
 
 Lookup tables are linearly interpolated. Splines can result in negative values
 (e.g. sheet resistance). Gradient/Hessian discontinuities don't seem to pose a
 problem for optimization.
-
-The range of the simulation conditions is equal to the limits of the highest
-quality data in TSuprem:
-- Implantation energy: 20 - 80 keV
-- Implantation dose: 2e14 - 2e16 per sq cm
-- Annealing temp: 900 - 1100C (1173 - 1373K)
-- Annealing time: 15 - 120 min
 """
 
 from importlib import resources
@@ -30,39 +36,77 @@ from scipy.interpolate import interpn
 
 from piezod.cantilever import Cantilever
 
-# Module-level cache for lookup table data (loaded once)
-_LOOKUP_TABLE_CACHE: dict | None = None
+# Module-level cache for lookup table data, keyed by source name
+_LOOKUP_TABLE_CACHE: dict[str, dict] = {}
+
+# Valid annealing types per lookup source
+_ANNEAL_TYPES: dict[str, dict[str, int]] = {
+    "tsuprem4": {"inert": 1, "oxide": 2},
+    "dopedealer": {"inert": 1, "dry_o2": 2, "wet_o2": 3},
+}
+
+# Default optimization bounds per lookup source
+_DEFAULT_BOUNDS: dict[str, dict[str, float]] = {
+    "tsuprem4": {
+        "min_annealing_time": 15 * 60,
+        "max_annealing_time": 120 * 60,
+        "min_annealing_temp": 273 + 900,
+        "max_annealing_temp": 273 + 1100,
+        "min_implantation_energy": 20,
+        "max_implantation_energy": 80,
+        "min_implantation_dose": 2e14,
+        "max_implantation_dose": 2e16,
+    },
+    "dopedealer": {
+        "min_annealing_time": 15 * 60,
+        "max_annealing_time": 120 * 60,
+        "min_annealing_temp": 273 + 850,
+        "max_annealing_temp": 273 + 1100,
+        "min_implantation_energy": 10,
+        "max_implantation_energy": 120,
+        "min_implantation_dose": 1e13,
+        "max_implantation_dose": 8e16,
+    },
+}
+
+# HDF5 filenames per lookup source
+_LOOKUP_FILENAMES: dict[str, str] = {
+    "tsuprem4": "ionImplantLookupTable_tsuprem.h5",
+    "dopedealer": "ionImplantLookupTable_dopedealer.h5",
+}
 
 
-def _load_lookup_table() -> dict:
-    """Load the bundled ion implantation lookup table.
+def _load_lookup_table(source: str) -> dict:
+    """Load a bundled ion implantation lookup table.
+
+    Args:
+        source: Lookup table source ("tsuprem4" or "dopedealer")
 
     Returns:
-        Dictionary containing lookup table arrays:
-            - z: Depth points (microns)
-            - ImplantDopants: Dopant type indices (1=B, 2=P, 3=As)
-            - ImplantDoses: Dose values (cm^-2)
-            - ImplantEnergies: Energy values (keV)
-            - AnnealTemps: Temperature values (C)
-            - AnnealTimes: Time values (minutes)
-            - AnnealOxidation: Oxidation type (1=inert, 2=oxide)
-            - n: Doping concentration (cm^-3)
-            - Xj: Junction depth (m)
-            - Rs: Sheet resistance (Ohm/sq)
-            - Nz: Effective doping (cm^-2)
-            - Beta1, Beta2: Piezoresistive coefficients
+        Dictionary containing lookup table arrays.
+
+    Raises:
+        ValueError: If source is not recognized.
+        FileNotFoundError: If the lookup table file is not bundled.
     """
-    global _LOOKUP_TABLE_CACHE
-    if _LOOKUP_TABLE_CACHE is not None:
-        return _LOOKUP_TABLE_CACHE
+    if source in _LOOKUP_TABLE_CACHE:
+        return _LOOKUP_TABLE_CACHE[source]
+
+    if source not in _LOOKUP_FILENAMES:
+        raise ValueError(
+            f"Unknown lookup source: {source!r}. "
+            f"Must be one of: {sorted(_LOOKUP_FILENAMES.keys())}"
+        )
+
+    filename = _LOOKUP_FILENAMES[source]
 
     with (
-        resources.files("piezod.data").joinpath("ionImplantLookupTable.h5").open("rb") as f,
+        resources.files("piezod.data").joinpath(filename).open("rb") as f,
         h5py.File(f, "r") as hf,
     ):
-        _LOOKUP_TABLE_CACHE = {key: np.array(hf[key]) for key in hf}
+        _LOOKUP_TABLE_CACHE[source] = {key: np.array(hf[key]) for key in hf}
 
-    return _LOOKUP_TABLE_CACHE
+    return _LOOKUP_TABLE_CACHE[source]
 
 
 class CantileverImplantation(Cantilever):
@@ -70,12 +114,18 @@ class CantileverImplantation(Cantilever):
 
     Lookup table data is automatically loaded from the bundled HDF5 file.
 
+    Args:
+        lookup_source: Which process simulator lookup table to use.
+            "tsuprem4" uses the TSUPREM-4 table (default).
+            "dopedealer" uses the DopeDealer table.
+
     Attributes:
-        implantation_energy: Ion implantation energy (keV), range: 20-80
-        implantation_dose: Ion implantation dose (cm^-2), range: 2e14-2e16
-        annealing_temp: Annealing temperature (K), range: 1173-1373 (900-1100C)
-        annealing_time: Annealing time (seconds), range: 900-7200 (15-120 min)
-        annealing_type: Annealing environment ('inert' or 'oxide')
+        implantation_energy: Ion implantation energy (keV)
+        implantation_dose: Ion implantation dose (cm^-2)
+        annealing_temp: Annealing temperature (K)
+        annealing_time: Annealing time (seconds)
+        annealing_type: Annealing environment (source-dependent, see module docstring)
+        lookup_source: Which lookup table is in use ("tsuprem4" or "dopedealer")
     """
 
     def __init__(
@@ -90,9 +140,10 @@ class CantileverImplantation(Cantilever):
         doping_type: Literal["boron", "phosphorus", "arsenic"],
         annealing_time: float,
         annealing_temp: float,
-        annealing_type: Literal["inert", "oxide"],
+        annealing_type: str,
         implantation_energy: float,
         implantation_dose: float,
+        lookup_source: Literal["tsuprem4", "dopedealer"] = "tsuprem4",
     ):
         """Initialize ion-implanted cantilever.
 
@@ -107,10 +158,18 @@ class CantileverImplantation(Cantilever):
             doping_type: Dopant type ('boron', 'phosphorus', or 'arsenic')
             annealing_time: Annealing time (seconds)
             annealing_temp: Annealing temperature (K)
-            annealing_type: Annealing environment ('inert' or 'oxide')
+            annealing_type: Annealing environment. For tsuprem4: 'inert' or
+                'oxide'. For dopedealer: 'inert', 'dry_o2', or 'wet_o2'.
             implantation_energy: Ion implantation energy (keV)
             implantation_dose: Ion implantation dose (cm^-2)
+            lookup_source: Lookup table source ('tsuprem4' or 'dopedealer')
         """
+        if lookup_source not in _LOOKUP_FILENAMES:
+            raise ValueError(
+                f"Unknown lookup_source: {lookup_source!r}. "
+                f"Must be one of: {sorted(_LOOKUP_FILENAMES.keys())}"
+            )
+
         super().__init__()
 
         # Set basic cantilever parameters
@@ -129,31 +188,37 @@ class CantileverImplantation(Cantilever):
         self.annealing_type = annealing_type
         self.annealing_temp = annealing_temp
         self.annealing_time = annealing_time
+        self.lookup_source = lookup_source
 
         # Load bundled lookup table
-        self._lookup_data = _load_lookup_table()
+        self._lookup_data = _load_lookup_table(lookup_source)
+
+        # Resolve the ambient axis key (differs between tables)
+        if "AnnealAmbient" in self._lookup_data:
+            self._ambient_key = "AnnealAmbient"
+        else:
+            self._ambient_key = "AnnealOxidation"
 
     def anneal_number(self) -> int:
         """Convert annealing type to lookup table index.
 
         Returns:
-            1 for 'inert', 2 for 'oxide'
+            Integer index for the annealing type in the active lookup table.
 
         Raises:
-            ValueError: If annealing_type is not 'inert' or 'oxide'
+            ValueError: If annealing_type is not valid for the active table.
         """
-        if self.annealing_type == "inert":
-            return 1
-        elif self.annealing_type == "oxide":
-            return 2
-        else:
-            raise ValueError(f"Unknown anneal condition: {self.annealing_type}. Must be 'inert' or 'oxide'.")
+        anneal_map = _ANNEAL_TYPES[self.lookup_source]
+        if self.annealing_type in anneal_map:
+            return anneal_map[self.annealing_type]
+        valid = sorted(anneal_map.keys())
+        raise ValueError(
+            f"Unknown anneal condition: {self.annealing_type!r} "
+            f"for source {self.lookup_source!r}. Must be one of: {valid}"
+        )
 
     def _interpolate_lookup(self, field_name: str) -> float:
         """Interpolate a single value from lookup table.
-
-        This helper method handles the common interpolation pattern to avoid
-        code duplication across multiple methods.
 
         Args:
             field_name: Name of the field to interpolate from lookup table
@@ -161,7 +226,6 @@ class CantileverImplantation(Cantilever):
         Returns:
             Interpolated value at current cantilever parameters
         """
-        # Convert temperatures from K to C and time from seconds to minutes
         anneal_temp_c = self.annealing_temp - 273
         anneal_time_min = self.annealing_time / 60
 
@@ -172,7 +236,7 @@ class CantileverImplantation(Cantilever):
                 self._lookup_data["ImplantEnergies"],
                 self._lookup_data["AnnealTemps"],
                 self._lookup_data["AnnealTimes"],
-                self._lookup_data["AnnealOxidation"],
+                self._lookup_data[self._ambient_key],
             ),
             self._lookup_data[field_name],
             np.array(
@@ -189,7 +253,6 @@ class CantileverImplantation(Cantilever):
             ),
             method="linear",
         )
-        # interpn returns an array, extract the scalar value
         return float(result[0])
 
     def doping_profile(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -206,18 +269,14 @@ class CantileverImplantation(Cantilever):
             limit, which is generally not the case in the ion implantation data.
             Data beyond the device thickness is removed.
         """
-        # Convert from microns to meters
-        x = self._lookup_data["z"] * 1e-6  # 10nm spacing from 0 to 5um
+        x = self._lookup_data["z"] * 1e-6  # Convert from microns to meters
 
-        # Convert temperatures from K to C and time from seconds to minutes
         anneal_temp_c = self.annealing_temp - 273
         anneal_time_min = self.annealing_time / 60
 
-        # For doping_profile, x is the first dimension, so we interpolate at each x point
-        # Create query points: for each x, use the same dopant/dose/energy/temp/time/oxidation
         xi = np.column_stack(
             [
-                x,  # First dimension is depth
+                x,
                 np.full(len(x), self.dopantNumber()),
                 np.full(len(x), self.implantation_dose),
                 np.full(len(x), self.implantation_energy),
@@ -227,7 +286,6 @@ class CantileverImplantation(Cantilever):
             ]
         )
 
-        # Interpolate doping concentration
         n = interpn(
             (
                 x,
@@ -236,19 +294,17 @@ class CantileverImplantation(Cantilever):
                 self._lookup_data["ImplantEnergies"],
                 self._lookup_data["AnnealTemps"],
                 self._lookup_data["AnnealTimes"],
-                self._lookup_data["AnnealOxidation"],
+                self._lookup_data[self._ambient_key],
             ),
             self._lookup_data["n"],
             xi,
             method="linear",
         )
 
-        # Remove data beyond the device thickness
         mask = x <= self.t
         x = x[mask]
         n = n[mask]
 
-        # Active = total for ion implantation
         active_doping = n
         total_doping = n
 
@@ -272,13 +328,17 @@ class CantileverImplantation(Cantilever):
         return self._interpolate_lookup("Rs")
 
     def Nz(self) -> float:
-        """Effective doping concentration from lookup table.
+        """Mobility-weighted effective carrier sheet density from lookup table.
 
-        Note:
-            Nz != Nz_total due to current crowding effects.
+        Harmon current-crowding formula:
+            Nz = (integral mu*N dz)^2 / integral mu^2*N dz
+        Nz <= Nz_total (the raw retained active dose); the difference arises
+        because higher-doping regions carry a disproportionate share of
+        current, reducing the effective carrier count for 1/f noise.
 
         Returns:
-            Effective doping concentration (cm^-2)
+            Effective carrier sheet density (1/m^2). Consistent with
+            cantilever.number_of_carriers = Nz * resistor_area[m^2].
         """
         return self._interpolate_lookup("Nz")
 
@@ -294,7 +354,6 @@ class CantileverImplantation(Cantilever):
         Beta1 = self._interpolate_lookup("Beta1")
         Beta2 = self._interpolate_lookup("Beta2")
 
-        # Beta2 is in units of microns, so convert t
         return Beta1 - 2 / (self.t * 1e6) * Beta2
 
     @property
@@ -311,7 +370,6 @@ class CantileverImplantation(Cantilever):
         Raises:
             ValueError: If doping_type is not recognized
         """
-        # Diffusion parameters for different dopants
         diffusion_params = {
             "arsenic": {"D0": 22.9, "Ea": 4.1},  # cm^2/s, eV
             "boron": {"D0": 0.76, "Ea": 3.46},  # cm^2/s, eV
@@ -319,16 +377,17 @@ class CantileverImplantation(Cantilever):
         }
 
         if self.doping_type not in diffusion_params:
-            raise ValueError(f"Unknown doping type: {self.doping_type}. Must be 'arsenic', 'boron', or 'phosphorus'.")
+            raise ValueError(
+                f"Unknown doping type: {self.doping_type}. "
+                f"Must be 'arsenic', 'boron', or 'phosphorus'."
+            )
 
         params = diffusion_params[self.doping_type]
         D0 = params["D0"]
         Ea = params["Ea"]
 
-        # Calculate diffusivity (cm^2/s)
         diffusivity = D0 * np.exp(-Ea / self.k_b_eV / self.annealing_temp)
 
-        # Calculate diffusion length (cm)
         return np.sqrt(diffusivity * self.annealing_time)
 
     def alpha(self) -> float:
@@ -389,6 +448,8 @@ class CantileverImplantation(Cantilever):
     def doping_optimization_bounds(self, parameter_constraints: dict | None = None) -> Tuple[np.ndarray, np.ndarray]:
         """Get optimization bounds for doping parameters.
 
+        Default bounds depend on the active lookup table source.
+
         Args:
             parameter_constraints: Optional dict to override default bounds.
                 Keys can be any of:
@@ -400,19 +461,8 @@ class CantileverImplantation(Cantilever):
         Returns:
             Tuple of (lower_bounds, upper_bounds) arrays
         """
-        # Default bounds based on TSuprem data range
-        bounds = {
-            "min_annealing_time": 15 * 60,  # seconds
-            "max_annealing_time": 120 * 60,
-            "min_annealing_temp": 273 + 900,  # K
-            "max_annealing_temp": 273 + 1100,
-            "min_implantation_energy": 20,  # keV
-            "max_implantation_energy": 80,
-            "min_implantation_dose": 2e14,  # cm^-2
-            "max_implantation_dose": 2e16,
-        }
+        bounds = dict(_DEFAULT_BOUNDS[self.lookup_source])
 
-        # Override with user-provided constraints
         if parameter_constraints is not None:
             bounds.update(parameter_constraints)
 

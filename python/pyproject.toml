@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "piezod"
-version = "0.8.3"
+version = "0.9.0"
 description = "Modeling and optimization of piezoresistive and piezoelectric sensors and actuators"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -49,13 +49,15 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.sdist.force-include]
-"src/piezod/data/ionImplantLookupTable.h5" = "src/piezod/data/ionImplantLookupTable.h5"
+"src/piezod/data/ionImplantLookupTable_tsuprem.h5" = "src/piezod/data/ionImplantLookupTable_tsuprem.h5"
+"src/piezod/data/ionImplantLookupTable_dopedealer.h5" = "src/piezod/data/ionImplantLookupTable_dopedealer.h5"
 
 [tool.hatch.build.targets.wheel]
 sources = ["src"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/piezod/data/ionImplantLookupTable.h5" = "piezod/data/ionImplantLookupTable.h5"
+"src/piezod/data/ionImplantLookupTable_tsuprem.h5" = "piezod/data/ionImplantLookupTable_tsuprem.h5"
+"src/piezod/data/ionImplantLookupTable_dopedealer.h5" = "piezod/data/ionImplantLookupTable_dopedealer.h5"
 "src/piezod/default.mplstyle" = "piezod/default.mplstyle"
 
 [tool.ruff]
