@@ -89,19 +89,11 @@ PiezoD/
 
 ## Release
 
-- PyPI releases go through CI, never from a local machine. There are no
-  credentials on local machines; PyPI uses trusted publishing (OIDC) from
-  GitHub Actions.
-- Plan of record: invoke the `/release` skill. It bumps the version,
-  creates a GitHub Release, and the release event triggers the
-  `publish.yml` workflow which builds and uploads to PyPI.
-- Equivalent manual trigger: `gh workflow run release.yml -f version=X.Y.Z`
-  from the repo root.
-- Do not run `uv publish` or `twine upload` locally. There is no local
-  auth path; it will fail, and the intent is to keep the release pipeline
-  auditable and reproducible via CI only.
-- Workflow files: `.github/workflows/release.yml` (create release + tag),
-  `.github/workflows/publish.yml` (build + upload to PyPI on release event).
+- Use `.claude/skills/release/skill.md` for every release.
+- Do not substitute individual workflow or manual commands for the release skill.
+- A release is not complete until the GitHub Release has user-facing release notes,
+  the publish workflow succeeds, and PyPI shows the new version.
+- Never publish locally with `uv publish` or `twine upload`; PyPI uses CI trusted publishing.
 
 ## Code Quality
 
