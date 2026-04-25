@@ -22,7 +22,7 @@ class TestCantileverImplantationInitialization:
             "v_bridge": 5.0,
             "doping_type": "boron",
             "annealing_time": 3600,  # 60 min
-            "annealing_temp": 1173,  # 900C
+            "annealing_temp": 1173.15,  # 900 C
             "annealing_type": "inert",
             "implantation_energy": 50,
             "implantation_dose": 1e15,
@@ -35,7 +35,7 @@ class TestCantileverImplantationInitialization:
         assert cantilever.implantation_energy == 50
         assert cantilever.implantation_dose == 1e15
         assert cantilever.annealing_type == "inert"
-        assert cantilever.annealing_temp == 1173
+        assert cantilever.annealing_temp == 1173.15
         assert cantilever.annealing_time == 3600
         # Lookup table is auto-loaded
         assert cantilever._lookup_data is not None
@@ -71,7 +71,7 @@ class TestAnnealNumber:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -90,7 +90,7 @@ class TestAnnealNumber:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="oxide",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -126,7 +126,7 @@ class TestDiffusionLength:
             "l_pr_ratio": 0.5,
             "v_bridge": 5.0,
             "annealing_time": 3600,  # 60 min
-            "annealing_temp": 1173,  # 900C
+            "annealing_temp": 1173.15,  # 900 C
             "annealing_type": "inert",
             "implantation_energy": 50,
             "implantation_dose": 1e15,
@@ -141,7 +141,7 @@ class TestDiffusionLength:
         D0 = 0.76  # cm^2/s
         Ea = 3.46  # eV
         k_b_eV = 8.617343e-5  # eV/K
-        T = 1173  # K
+        T = 1173.15  # K
         t = 3600  # s
         D = D0 * np.exp(-Ea / k_b_eV / T)
         expected = np.sqrt(D * t)
@@ -157,7 +157,7 @@ class TestDiffusionLength:
         D0 = 3.85  # cm^2/s
         Ea = 3.66  # eV
         k_b_eV = 8.617343e-5  # eV/K
-        T = 1173  # K
+        T = 1173.15  # K
         t = 3600  # s
         D = D0 * np.exp(-Ea / k_b_eV / T)
         expected = np.sqrt(D * t)
@@ -173,7 +173,7 @@ class TestDiffusionLength:
         D0 = 22.9  # cm^2/s
         Ea = 4.1  # eV
         k_b_eV = 8.617343e-5  # eV/K
-        T = 1173  # K
+        T = 1173.15  # K
         t = 3600  # s
         D = D0 * np.exp(-Ea / k_b_eV / T)
         expected = np.sqrt(D * t)
@@ -185,7 +185,7 @@ class TestDiffusionLength:
         cantilever_params["doping_type"] = "boron"
 
         cantilever_low = CantileverImplantation(**cantilever_params)
-        cantilever_params["annealing_temp"] = 1373  # Higher temp
+        cantilever_params["annealing_temp"] = 1373.15  # Higher temp
         cantilever_high = CantileverImplantation(**cantilever_params)
 
         assert cantilever_high.diffusion_length > cantilever_low.diffusion_length
@@ -229,7 +229,7 @@ class TestAlpha:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -259,7 +259,7 @@ class TestAlpha:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=900,  # 15 min
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -275,7 +275,7 @@ class TestAlpha:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=7200,  # 120 min
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -300,7 +300,7 @@ class TestOptimizationScaling:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -338,7 +338,7 @@ class TestOptimizationBounds:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -356,8 +356,8 @@ class TestOptimizationBounds:
         assert ub[0] == pytest.approx(120 * 60)
 
         # Check temp bounds (K)
-        assert lb[1] == pytest.approx(273 + 900)
-        assert ub[1] == pytest.approx(273 + 1100)
+        assert lb[1] == pytest.approx(273.15 + 900)
+        assert ub[1] == pytest.approx(273.15 + 1100)
 
         # Check energy bounds (keV)
         assert lb[2] == pytest.approx(20)
@@ -390,22 +390,22 @@ class TestOptimizationBounds:
         assert lb[0] == pytest.approx(1800)
         assert ub[0] == pytest.approx(5400)
         # Others should remain default
-        assert lb[1] == pytest.approx(273 + 900)
-        assert ub[1] == pytest.approx(273 + 1100)
+        assert lb[1] == pytest.approx(273.15 + 900)
+        assert ub[1] == pytest.approx(273.15 + 1100)
 
     def test_multiple_custom_bounds(self, cantilever):
         """Test multiple custom constraints."""
         constraints = {
-            "min_annealing_temp": 273 + 950,
-            "max_annealing_temp": 273 + 1050,
+            "min_annealing_temp": 273.15 + 950,
+            "max_annealing_temp": 273.15 + 1050,
             "min_implantation_energy": 30,
             "max_implantation_energy": 70,
         }
 
         lb, ub = cantilever.doping_optimization_bounds(constraints)
 
-        assert lb[1] == pytest.approx(273 + 950)
-        assert ub[1] == pytest.approx(273 + 1050)
+        assert lb[1] == pytest.approx(273.15 + 950)
+        assert ub[1] == pytest.approx(273.15 + 1050)
         assert lb[2] == pytest.approx(30)
         assert ub[2] == pytest.approx(70)
 
@@ -426,7 +426,7 @@ class TestDopingState:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -438,7 +438,7 @@ class TestDopingState:
 
         assert len(state) == 4
         assert state[0] == pytest.approx(3600)
-        assert state[1] == pytest.approx(1173)
+        assert state[1] == pytest.approx(1173.15)
         assert state[2] == pytest.approx(50)
         assert state[3] == pytest.approx(1e15)
 
@@ -450,13 +450,13 @@ class TestDopingState:
     def test_from_state(self, cantilever):
         """Test doping_cantilever_from_state updates parameters."""
         # Create state vector with 10 elements (6 base + 4 doping)
-        new_state = np.array([0, 0, 0, 0, 0, 0, 7200, 1273, 60, 5e15])
+        new_state = np.array([0, 0, 0, 0, 0, 0, 7200, 1273.15, 60, 5e15])
 
         result = cantilever.doping_cantilever_from_state(new_state)
 
         assert result is cantilever  # Should return self
         assert cantilever.annealing_time == pytest.approx(7200)
-        assert cantilever.annealing_temp == pytest.approx(1273)
+        assert cantilever.annealing_temp == pytest.approx(1273.15)
         assert cantilever.implantation_energy == pytest.approx(60)
         assert cantilever.implantation_dose == pytest.approx(5e15)
 
@@ -466,7 +466,7 @@ class TestDopingState:
 
         # Modify the cantilever
         cantilever.annealing_time = 7200
-        cantilever.annealing_temp = 1273
+        cantilever.annealing_temp = 1273.15
 
         # Restore original state
         full_state = np.concatenate([np.zeros(6), original_state])
@@ -492,7 +492,7 @@ class TestRandomInitialConditions:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -552,7 +552,7 @@ class TestLookupTableInterpolation:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,  # 60 min
-            annealing_temp=1173,  # 900C
+            annealing_temp=1173.15,  # 900 C
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -616,6 +616,128 @@ class TestLookupTableInterpolation:
         assert np.all(x <= cantilever.t)
 
 
+class TestDopingProcessMetrics:
+    """Test public process metrics for implanted cantilevers."""
+
+    @pytest.fixture
+    def cantilever(self):
+        """Create an implanted cantilever for metrics tests."""
+        return CantileverImplantation(
+            freq_min=1e3,
+            freq_max=1e6,
+            l=100e-6,
+            w=20e-6,
+            t=2e-6,
+            l_pr_ratio=0.5,
+            v_bridge=5.0,
+            doping_type="boron",
+            annealing_time=3600,
+            annealing_temp=1173.15,
+            annealing_type="inert",
+            implantation_energy=50,
+            implantation_dose=1e15,
+        )
+
+    def test_metrics_are_finite(self, cantilever):
+        """Test process metrics return finite values."""
+        metrics = cantilever.doping_process_metrics()
+        values = [
+            metrics.alpha_h,
+            metrics.nz,
+            metrics.beta1,
+            metrics.beta2_um,
+            metrics.beta,
+            metrics.sheet_resistance,
+            metrics.junction_depth_m,
+            metrics.peak_concentration_cm3,
+            metrics.retained_dose_cm2,
+        ]
+
+        assert np.all(np.isfinite(values))
+
+    def test_beta_uses_default_thickness(self, cantilever):
+        """Test beta combines beta1 and beta2 using cantilever thickness."""
+        metrics = cantilever.doping_process_metrics()
+        expected_beta = metrics.beta1 - 2 * metrics.beta2_um / (cantilever.t * 1e6)
+
+        assert metrics.beta == pytest.approx(expected_beta)
+
+    def test_thickness_override_changes_only_combined_beta(self, cantilever):
+        """Test thickness override affects beta but not lookup beta values."""
+        default_metrics = cantilever.doping_process_metrics()
+        override_metrics = cantilever.doping_process_metrics(device_thickness_m=4e-6)
+
+        assert override_metrics.beta != pytest.approx(default_metrics.beta)
+        assert override_metrics.beta1 == pytest.approx(default_metrics.beta1)
+        assert override_metrics.beta2_um == pytest.approx(default_metrics.beta2_um)
+
+
+class TestDopingOptimization:
+    """Test public process-only doping optimization."""
+
+    @pytest.fixture
+    def cantilever(self):
+        """Create a DopeDealer phosphorus cantilever for optimization tests."""
+        return CantileverImplantation(
+            freq_min=1e3,
+            freq_max=1e6,
+            l=100e-6,
+            w=20e-6,
+            t=2e-6,
+            l_pr_ratio=0.5,
+            v_bridge=5.0,
+            doping_type="phosphorus",
+            annealing_time=3600,
+            annealing_temp=273.15 + 950,
+            annealing_type="inert",
+            implantation_energy=50,
+            implantation_dose=1e15,
+            lookup_source="dopedealer",
+        )
+
+    @staticmethod
+    def default_objective(metrics):
+        """Evaluate the documented default objective."""
+        return np.log(metrics.alpha_h) - np.log(metrics.nz) - 2 * np.log(abs(metrics.beta))
+
+    def test_optimize_doping_runs_and_improves_default_objective(self, cantilever):
+        """Test default optimizer returns an improved physical process state."""
+        original_state = cantilever.doping_current_state().copy()
+        starting_objective = self.default_objective(cantilever.doping_process_metrics())
+
+        result = cantilever.optimize_doping(log_dose=True)
+        lb, ub = cantilever.doping_optimization_bounds()
+
+        assert result.objective_value <= starting_objective + 1e-8
+        assert np.all(result.state >= lb)
+        assert np.all(result.state <= ub)
+        assert result.optimized is not cantilever
+        np.testing.assert_allclose(cantilever.doping_current_state(), original_state)
+        assert len(result.all_results) == 1
+
+    def test_boundary_starts_do_not_raise_out_of_bounds(self, cantilever):
+        """Test lower and upper boundary starts stay valid for interpolation."""
+        lb, ub = cantilever.doping_optimization_bounds()
+
+        result = cantilever.optimize_doping(
+            initial_states=[lb, ub],
+            log_dose=True,
+        )
+
+        assert np.isfinite(result.objective_value)
+        assert len(result.all_results) == 2
+        assert set(result.boundary_flags) == {
+            "annealing_time_at_min",
+            "annealing_time_at_max",
+            "annealing_temp_at_min",
+            "annealing_temp_at_max",
+            "implantation_energy_at_min",
+            "implantation_energy_at_max",
+            "implantation_dose_at_min",
+            "implantation_dose_at_max",
+        }
+
+
 class TestInheritance:
     """Test that CantileverImplantation properly inherits from Cantilever."""
 
@@ -637,7 +759,7 @@ class TestInheritance:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,
@@ -662,7 +784,7 @@ class TestInheritance:
             v_bridge=5.0,
             doping_type="boron",
             annealing_time=3600,
-            annealing_temp=1173,
+            annealing_temp=1173.15,
             annealing_type="inert",
             implantation_energy=50,
             implantation_dose=1e15,

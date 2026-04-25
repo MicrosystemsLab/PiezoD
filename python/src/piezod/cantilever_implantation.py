@@ -27,12 +27,18 @@ Lookup tables are linearly interpolated. Splines can result in negative values
 problem for optimization.
 """
 
+from __future__ import annotations
+
+import copy
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from importlib import resources
 from typing import Literal, Tuple
 
 import h5py
 import numpy as np
 from scipy.interpolate import interpn
+from scipy.optimize import OptimizeResult, minimize
 
 from piezod.cantilever import Cantilever
 
@@ -50,8 +56,8 @@ _DEFAULT_BOUNDS: dict[str, dict[str, float]] = {
     "tsuprem4": {
         "min_annealing_time": 15 * 60,
         "max_annealing_time": 120 * 60,
-        "min_annealing_temp": 273 + 900,
-        "max_annealing_temp": 273 + 1100,
+        "min_annealing_temp": 273.15 + 900,
+        "max_annealing_temp": 273.15 + 1100,
         "min_implantation_energy": 20,
         "max_implantation_energy": 80,
         "min_implantation_dose": 2e14,
@@ -60,8 +66,8 @@ _DEFAULT_BOUNDS: dict[str, dict[str, float]] = {
     "dopedealer": {
         "min_annealing_time": 15 * 60,
         "max_annealing_time": 120 * 60,
-        "min_annealing_temp": 273 + 850,
-        "max_annealing_temp": 273 + 1100,
+        "min_annealing_temp": 273.15 + 850,
+        "max_annealing_temp": 273.15 + 1100,
         "min_implantation_energy": 10,
         "max_implantation_energy": 120,
         "min_implantation_dose": 1e13,
@@ -74,6 +80,63 @@ _LOOKUP_FILENAMES: dict[str, str] = {
     "tsuprem4": "ionImplantLookupTable_tsuprem.h5",
     "dopedealer": "ionImplantLookupTable_dopedealer.h5",
 }
+
+_DOPING_STATE_NAMES: tuple[str, ...] = (
+    "annealing_time",
+    "annealing_temp",
+    "implantation_energy",
+    "implantation_dose",
+)
+
+
+@dataclass(frozen=True)
+class DopingProcessMetrics:
+    """Ion implantation process metrics used for optimization."""
+
+    alpha_h: float
+    nz: float
+    beta1: float
+    beta2_um: float
+    beta: float
+    sheet_resistance: float
+    junction_depth_m: float
+    peak_concentration_cm3: float
+    retained_dose_cm2: float
+
+
+@dataclass(frozen=True)
+class DopingOptimizationResult:
+    """Result returned by doping process optimization."""
+
+    optimized: CantileverImplantation
+    metrics: DopingProcessMetrics
+    objective_value: float
+    state: np.ndarray
+    scipy_result: OptimizeResult
+    all_results: tuple[OptimizeResult, ...]
+    boundary_flags: dict[str, bool]
+
+
+def _default_doping_objective(metrics: DopingProcessMetrics) -> float:
+    """Evaluate the default noise and sensitivity process objective."""
+    beta_magnitude = abs(metrics.beta)
+    if metrics.alpha_h <= 0 or metrics.nz <= 0 or beta_magnitude <= 0:
+        return float("inf")
+
+    return float(np.log(metrics.alpha_h) - np.log(metrics.nz) - 2 * np.log(beta_magnitude))
+
+
+def _doping_boundary_flags(
+    state: np.ndarray,
+    lower_bounds: np.ndarray,
+    upper_bounds: np.ndarray,
+) -> dict[str, bool]:
+    """Return flags indicating whether the public state is on each bound."""
+    flags: dict[str, bool] = {}
+    for index, name in enumerate(_DOPING_STATE_NAMES):
+        flags[f"{name}_at_min"] = bool(np.isclose(state[index], lower_bounds[index]))
+        flags[f"{name}_at_max"] = bool(np.isclose(state[index], upper_bounds[index]))
+    return flags
 
 
 def _load_lookup_table(source: str) -> dict:
@@ -93,10 +156,7 @@ def _load_lookup_table(source: str) -> dict:
         return _LOOKUP_TABLE_CACHE[source]
 
     if source not in _LOOKUP_FILENAMES:
-        raise ValueError(
-            f"Unknown lookup source: {source!r}. "
-            f"Must be one of: {sorted(_LOOKUP_FILENAMES.keys())}"
-        )
+        raise ValueError(f"Unknown lookup source: {source!r}. Must be one of: {sorted(_LOOKUP_FILENAMES.keys())}")
 
     filename = _LOOKUP_FILENAMES[source]
 
@@ -166,8 +226,7 @@ class CantileverImplantation(Cantilever):
         """
         if lookup_source not in _LOOKUP_FILENAMES:
             raise ValueError(
-                f"Unknown lookup_source: {lookup_source!r}. "
-                f"Must be one of: {sorted(_LOOKUP_FILENAMES.keys())}"
+                f"Unknown lookup_source: {lookup_source!r}. Must be one of: {sorted(_LOOKUP_FILENAMES.keys())}"
             )
 
         super().__init__()
@@ -226,7 +285,7 @@ class CantileverImplantation(Cantilever):
         Returns:
             Interpolated value at current cantilever parameters
         """
-        anneal_temp_c = self.annealing_temp - 273
+        anneal_temp_c = self.annealing_temp - 273.15
         anneal_time_min = self.annealing_time / 60
 
         result = interpn(
@@ -271,7 +330,7 @@ class CantileverImplantation(Cantilever):
         """
         x = self._lookup_data["z"] * 1e-6  # Convert from microns to meters
 
-        anneal_temp_c = self.annealing_temp - 273
+        anneal_temp_c = self.annealing_temp - 273.15
         anneal_time_min = self.annealing_time / 60
 
         xi = np.column_stack(
@@ -377,10 +436,7 @@ class CantileverImplantation(Cantilever):
         }
 
         if self.doping_type not in diffusion_params:
-            raise ValueError(
-                f"Unknown doping type: {self.doping_type}. "
-                f"Must be 'arsenic', 'boron', or 'phosphorus'."
-            )
+            raise ValueError(f"Unknown doping type: {self.doping_type}. Must be 'arsenic', 'boron', or 'phosphorus'.")
 
         params = diffusion_params[self.doping_type]
         D0 = params["D0"]
@@ -400,7 +456,108 @@ class CantileverImplantation(Cantilever):
         """
         return 2.469e-10 * self.diffusion_length**-0.598
 
+    def doping_process_metrics(self, device_thickness_m: float | None = None) -> DopingProcessMetrics:
+        """Return process-only doping metrics from the implantation lookup table.
+
+        Args:
+            device_thickness_m: Optional device thickness used for the combined
+                beta calculation. If omitted, the cantilever thickness is used.
+
+        Returns:
+            Process metrics for the current implant and anneal conditions.
+        """
+        if device_thickness_m is None:
+            device_thickness_m = self.t
+
+        device_thickness_um = device_thickness_m * 1e6
+        beta1 = self._interpolate_lookup("Beta1")
+        beta2_um = self._interpolate_lookup("Beta2")
+        beta = beta1 - 2 * beta2_um / device_thickness_um
+
+        depth_m, active_doping, _total_doping = self.doping_profile()
+        depth_cm = depth_m * 100
+
+        return DopingProcessMetrics(
+            alpha_h=float(self.alpha()),
+            nz=float(self.Nz()),
+            beta1=float(beta1),
+            beta2_um=float(beta2_um),
+            beta=float(beta),
+            sheet_resistance=float(self.sheet_resistance()),
+            junction_depth_m=float(self.junction_depth),
+            peak_concentration_cm3=float(np.max(active_doping)),
+            retained_dose_cm2=float(np.trapezoid(active_doping, depth_cm)),
+        )
+
     # ========= Optimization Methods ==========
+
+    def _copy_with_doping_state(self, state: np.ndarray) -> "CantileverImplantation":
+        """Return a shallow copy with process variables replaced by state."""
+        candidate = copy.copy(self)
+        candidate.annealing_time = float(state[0])
+        candidate.annealing_temp = float(state[1])
+        candidate.implantation_energy = float(state[2])
+        candidate.implantation_dose = float(state[3])
+        return candidate
+
+    @staticmethod
+    def _validate_doping_state(state: np.ndarray) -> np.ndarray:
+        """Validate and normalize a process-only state vector."""
+        state = np.asarray(state, dtype=float)
+        if state.shape != (4,):
+            raise ValueError(
+                "Doping state must contain four values: "
+                "annealing_time_s, annealing_temp_K, implantation_energy_keV, implantation_dose_cm2."
+            )
+        return state
+
+    @staticmethod
+    def _optimizer_bounds(
+        lower_bounds: np.ndarray,
+        upper_bounds: np.ndarray,
+        log_dose: bool,
+    ) -> tuple[list[tuple[float, float]], np.ndarray, np.ndarray]:
+        """Return optimizer bounds and transformed lower and upper arrays."""
+        optimizer_lower_bounds = lower_bounds.astype(float).copy()
+        optimizer_upper_bounds = upper_bounds.astype(float).copy()
+
+        if log_dose:
+            if lower_bounds[3] <= 0 or upper_bounds[3] <= 0:
+                raise ValueError("Dose bounds must be positive when log_dose=True.")
+            optimizer_lower_bounds[3] = np.log10(lower_bounds[3])
+            optimizer_upper_bounds[3] = np.log10(upper_bounds[3])
+
+        optimizer_bounds = list(zip(optimizer_lower_bounds, optimizer_upper_bounds, strict=True))
+        return optimizer_bounds, optimizer_lower_bounds, optimizer_upper_bounds
+
+    @staticmethod
+    def _to_optimizer_state(state: np.ndarray, log_dose: bool) -> np.ndarray:
+        """Convert a physical process state to optimizer coordinates."""
+        optimizer_state = state.astype(float).copy()
+        if log_dose:
+            if optimizer_state[3] <= 0:
+                raise ValueError("Initial dose must be positive when log_dose=True.")
+            optimizer_state[3] = np.log10(optimizer_state[3])
+        return optimizer_state
+
+    @staticmethod
+    def _to_physical_state(
+        optimizer_state: np.ndarray,
+        log_dose: bool,
+        dose_bounds: tuple[float, float] | None = None,
+    ) -> np.ndarray:
+        """Convert optimizer coordinates to physical process state."""
+        state = np.asarray(optimizer_state, dtype=float).copy()
+        if log_dose:
+            dose = 10 ** state[3]
+            if dose_bounds is not None:
+                dose_min, dose_max = dose_bounds
+                if np.isclose(dose, dose_min, rtol=1e-14, atol=0.0):
+                    dose = dose_min
+                elif np.isclose(dose, dose_max, rtol=1e-14, atol=0.0):
+                    dose = dose_max
+            state[3] = dose
+        return state
 
     def doping_optimization_scaling(self) -> np.ndarray:
         """Get scaling factors for optimization variables.
@@ -497,3 +654,103 @@ class CantileverImplantation(Cantilever):
         """
         lb, ub = self.doping_optimization_bounds(parameter_constraints)
         return lb + np.random.rand(4) * (ub - lb)
+
+    def optimize_doping(
+        self,
+        objective: Callable[[DopingProcessMetrics], float] | None = None,
+        *,
+        device_thickness_m: float | None = None,
+        parameter_constraints: dict[str, float] | None = None,
+        initial_states: Sequence[np.ndarray] | None = None,
+        n_random_starts: int = 0,
+        method: str = "L-BFGS-B",
+        log_dose: bool = True,
+        random_seed: int | None = None,
+    ) -> DopingOptimizationResult:
+        """Optimize implantation and anneal process variables only.
+
+        Args:
+            objective: Callable that maps process metrics to a scalar objective.
+                If omitted, minimizes log(alpha_h) - log(nz) - 2 * log(abs(beta)).
+            device_thickness_m: Optional thickness for the combined beta metric.
+            parameter_constraints: Optional process bounds overrides.
+            initial_states: Optional physical process states to use as starts.
+            n_random_starts: Number of additional random physical starts.
+            method: SciPy minimize method.
+            log_dose: If true, optimize log10(dose) internally.
+            random_seed: Optional seed for random starts.
+
+        Returns:
+            Optimization result with the optimized cantilever copy and metrics.
+        """
+        if n_random_starts < 0:
+            raise ValueError("n_random_starts must be nonnegative.")
+
+        if objective is None:
+            objective = _default_doping_objective
+
+        lower_bounds, upper_bounds = self.doping_optimization_bounds(parameter_constraints)
+        optimizer_bounds, _, _ = self._optimizer_bounds(
+            lower_bounds,
+            upper_bounds,
+            log_dose,
+        )
+        dose_bounds = (float(lower_bounds[3]), float(upper_bounds[3]))
+
+        physical_starts: list[np.ndarray] = []
+        if initial_states is not None:
+            physical_starts.extend(self._validate_doping_state(state).copy() for state in initial_states)
+
+        if n_random_starts > 0:
+            if random_seed is None:
+                physical_starts.extend(
+                    self.doping_initial_conditions_random(parameter_constraints) for _ in range(n_random_starts)
+                )
+            else:
+                random_state = np.random.get_state()
+                try:
+                    np.random.seed(random_seed)
+                    physical_starts.extend(
+                        self.doping_initial_conditions_random(parameter_constraints) for _ in range(n_random_starts)
+                    )
+                finally:
+                    np.random.set_state(random_state)
+
+        if not physical_starts:
+            physical_starts.append(self.doping_current_state())
+
+        def objective_from_optimizer_state(optimizer_state: np.ndarray) -> float:
+            physical_state = self._to_physical_state(optimizer_state, log_dose, dose_bounds)
+            candidate = self._copy_with_doping_state(physical_state)
+            metrics = candidate.doping_process_metrics(device_thickness_m)
+            return float(objective(metrics))
+
+        all_results: list[OptimizeResult] = []
+        for physical_start in physical_starts:
+            optimizer_start = self._to_optimizer_state(physical_start, log_dose)
+            result = minimize(
+                objective_from_optimizer_state,
+                optimizer_start,
+                method=method,
+                bounds=optimizer_bounds,
+            )
+            all_results.append(result)
+
+        finite_results = [result for result in all_results if np.isfinite(result.fun)]
+        if not finite_results:
+            raise RuntimeError("Doping optimization did not produce a finite objective value.")
+
+        scipy_result = min(finite_results, key=lambda result: result.fun)
+        state = self._to_physical_state(scipy_result.x, log_dose, dose_bounds)
+        optimized = self._copy_with_doping_state(state)
+        metrics = optimized.doping_process_metrics(device_thickness_m)
+
+        return DopingOptimizationResult(
+            optimized=optimized,
+            metrics=metrics,
+            objective_value=float(scipy_result.fun),
+            state=state,
+            scipy_result=scipy_result,
+            all_results=tuple(all_results),
+            boundary_flags=_doping_boundary_flags(state, lower_bounds, upper_bounds),
+        )
