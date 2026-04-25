@@ -5,8 +5,10 @@ from piezod.cantilever_diffusion import CantileverDiffusion
 from piezod.cantilever_epitaxy import CantileverEpitaxy
 from piezod.cantilever_implantation import (
     CantileverImplantation,
+    DopingMetric,
     DopingOptimizationResult,
     DopingProcessMetrics,
+    MetricConstraint,
 )
 from piezod.cantilever_piezoelectric import (
     CantileverPiezoelectric,
@@ -22,10 +24,12 @@ __all__ = [
     "CantileverImplantation",
     "CantileverPiezoelectric",
     "CantileverPoly",
+    "DopingMetric",
     "DopingOptimizationResult",
     "DopingProcessMetrics",
     "FluidType",
     "Material",
+    "MetricConstraint",
     "PiezoMaterial",
 ]
 

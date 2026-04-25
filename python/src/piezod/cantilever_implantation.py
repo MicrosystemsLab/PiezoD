@@ -32,6 +32,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from importlib import resources
 from typing import Literal, Tuple
 
@@ -104,6 +105,39 @@ class DopingProcessMetrics:
     retained_dose_cm2: float
 
 
+class DopingMetric(str, Enum):
+    """Names of process metrics that can be hard-constrained during optimization.
+
+    Each value matches the corresponding attribute on DopingProcessMetrics so
+    the metric can be looked up generically.
+    """
+
+    ALPHA_H = "alpha_h"
+    NZ = "nz"
+    BETA1 = "beta1"
+    BETA2_UM = "beta2_um"
+    BETA = "beta"
+    SHEET_RESISTANCE = "sheet_resistance"
+    JUNCTION_DEPTH_M = "junction_depth_m"
+    PEAK_CONCENTRATION_CM3 = "peak_concentration_cm3"
+    RETAINED_DOSE_CM2 = "retained_dose_cm2"
+
+
+@dataclass(frozen=True)
+class MetricConstraint:
+    """Hard inequality constraint on a derived doping process metric.
+
+    At least one of `minimum` or `maximum` must be provided. Bounds are in the
+    units exposed by DopingProcessMetrics: sheet_resistance in ohm/sq,
+    junction_depth_m in meters, beta2_um in microns, retained_dose_cm2 in
+    cm^-2, peak_concentration_cm3 in cm^-3.
+    """
+
+    metric: DopingMetric
+    minimum: float | None = None
+    maximum: float | None = None
+
+
 @dataclass(frozen=True)
 class DopingOptimizationResult:
     """Result returned by doping process optimization."""
@@ -115,6 +149,9 @@ class DopingOptimizationResult:
     scipy_result: OptimizeResult
     all_results: tuple[OptimizeResult, ...]
     boundary_flags: dict[str, bool]
+
+
+_METRIC_CONSTRAINT_TOLERANCE = 1e-6
 
 
 def _default_doping_objective(metrics: DopingProcessMetrics) -> float:
@@ -137,6 +174,128 @@ def _doping_boundary_flags(
         flags[f"{name}_at_min"] = bool(np.isclose(state[index], lower_bounds[index]))
         flags[f"{name}_at_max"] = bool(np.isclose(state[index], upper_bounds[index]))
     return flags
+
+
+def _validate_metric_constraints(
+    constraints: Sequence[MetricConstraint],
+) -> tuple[MetricConstraint, ...]:
+    """Validate user-supplied metric constraints.
+
+    Each entry must be a MetricConstraint with a DopingMetric metric, at least
+    one finite bound, and minimum <= maximum if both are present.
+
+    Args:
+        constraints: Sequence of MetricConstraint instances.
+
+    Returns:
+        Immutable tuple of validated constraints.
+
+    Raises:
+        ValueError: If any constraint is malformed.
+    """
+    validated: list[MetricConstraint] = []
+    for index, constraint in enumerate(constraints):
+        if not isinstance(constraint, MetricConstraint):
+            raise ValueError(
+                f"metric_constraints[{index}] must be a MetricConstraint, got {type(constraint).__name__}."
+            )
+        if not isinstance(constraint.metric, DopingMetric):
+            raise ValueError(
+                f"metric_constraints[{index}].metric must be a DopingMetric enum, "
+                f"got {type(constraint.metric).__name__}."
+            )
+
+        minimum = constraint.minimum
+        maximum = constraint.maximum
+        if minimum is None and maximum is None:
+            raise ValueError(
+                f"metric_constraints[{index}] for {constraint.metric.value!r} must specify "
+                "at least one of minimum or maximum."
+            )
+        if minimum is not None and not np.isfinite(minimum):
+            raise ValueError(f"metric_constraints[{index}].minimum must be finite, got {minimum!r}.")
+        if maximum is not None and not np.isfinite(maximum):
+            raise ValueError(f"metric_constraints[{index}].maximum must be finite, got {maximum!r}.")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(
+                f"metric_constraints[{index}] for {constraint.metric.value!r}: "
+                f"minimum ({minimum}) must be <= maximum ({maximum})."
+            )
+
+        validated.append(constraint)
+
+    return tuple(validated)
+
+
+def _metric_value(metrics: DopingProcessMetrics, metric: DopingMetric) -> float:
+    """Extract a metric value from DopingProcessMetrics by enum."""
+    return float(getattr(metrics, metric.value))
+
+
+def _metric_constraint_residuals(
+    metrics: DopingProcessMetrics,
+    constraints: Sequence[MetricConstraint],
+) -> np.ndarray:
+    """Build the SLSQP inequality residual vector.
+
+    Each constraint contributes one residual per provided bound, scaled by
+    max(abs(limit), 1.0) for numerical conditioning. A residual >= 0 means the
+    bound is satisfied.
+
+    Args:
+        metrics: Process metrics evaluated at the candidate state.
+        constraints: Validated metric constraints.
+
+    Returns:
+        Residual array (length equals total number of bounds across all constraints).
+    """
+    residuals: list[float] = []
+    for constraint in constraints:
+        value = _metric_value(metrics, constraint.metric)
+        if constraint.minimum is not None:
+            scale = max(abs(constraint.minimum), 1.0)
+            residuals.append((value - constraint.minimum) / scale)
+        if constraint.maximum is not None:
+            scale = max(abs(constraint.maximum), 1.0)
+            residuals.append((constraint.maximum - value) / scale)
+    return np.asarray(residuals, dtype=float)
+
+
+def _build_slsqp_constraints(
+    constraints: Sequence[MetricConstraint],
+    state_to_metrics: Callable[[np.ndarray], DopingProcessMetrics],
+) -> list[dict]:
+    """Build a single vector-valued SLSQP inequality constraint.
+
+    Using a single dict means doping_process_metrics() is computed once per
+    optimizer state, not once per bound, which matters because each metric
+    evaluation interpolates the lookup table.
+
+    Args:
+        constraints: Validated metric constraints.
+        state_to_metrics: Callable that maps optimizer state to metrics.
+
+    Returns:
+        List with one SLSQP constraint dict.
+    """
+
+    def fun(optimizer_state: np.ndarray) -> np.ndarray:
+        metrics = state_to_metrics(optimizer_state)
+        return _metric_constraint_residuals(metrics, constraints)
+
+    return [{"type": "ineq", "fun": fun}]
+
+
+def _constraints_satisfied(
+    metrics: DopingProcessMetrics,
+    constraints: Sequence[MetricConstraint],
+    tol: float = _METRIC_CONSTRAINT_TOLERANCE,
+) -> bool:
+    """Check whether all constraint residuals are nonnegative within tol."""
+    if not constraints:
+        return True
+    residuals = _metric_constraint_residuals(metrics, constraints)
+    return bool(np.all(residuals >= -tol))
 
 
 def _load_lookup_table(source: str) -> dict:
@@ -655,39 +814,83 @@ class CantileverImplantation(Cantilever):
         lb, ub = self.doping_optimization_bounds(parameter_constraints)
         return lb + np.random.rand(4) * (ub - lb)
 
-    def optimize_doping(
+    def optimize_doping_for_hooge_noise(
         self,
         objective: Callable[[DopingProcessMetrics], float] | None = None,
         *,
         device_thickness_m: float | None = None,
         parameter_constraints: dict[str, float] | None = None,
+        metric_constraints: Sequence[MetricConstraint] | None = None,
         initial_states: Sequence[np.ndarray] | None = None,
         n_random_starts: int = 0,
-        method: str = "L-BFGS-B",
+        method: str | None = None,
         log_dose: bool = True,
         random_seed: int | None = None,
     ) -> DopingOptimizationResult:
-        """Optimize implantation and anneal process variables only.
+        """Optimize the implant and anneal process variables for Hooge-noise-limited resolution.
+
+        The default objective is the Hooge-noise-limited force-resolution figure
+        of merit, log(alpha_h) - log(Nz) - 2*log(|beta|). Pass a custom
+        `objective` to optimize a different criterion against the same process
+        variables.
+
+        Mirrors the MATLAB PiezoD fmincon pattern: direct parameter bounds
+        (parameter_constraints) plus optional nonlinear constraints on derived
+        metrics (metric_constraints).
 
         Args:
-            objective: Callable that maps process metrics to a scalar objective.
-                If omitted, minimizes log(alpha_h) - log(nz) - 2 * log(abs(beta)).
-            device_thickness_m: Optional thickness for the combined beta metric.
-            parameter_constraints: Optional process bounds overrides.
-            initial_states: Optional physical process states to use as starts.
+            objective: Maps DopingProcessMetrics to a scalar to minimize.
+                Defaults to the Hooge-noise-limited resolution figure of merit.
+            device_thickness_m: Optional thickness used for the combined beta
+                metric and for any beta-based metric constraints. If omitted,
+                the cantilever thickness is used. Threaded into both the
+                objective and the constraint metric evaluation so they agree.
+            parameter_constraints: Direct bounds on the four process variables
+                (annealing time/temp, implant energy/dose). Used as the
+                optimizer's box bounds. Temperatures are Kelvin. See
+                doping_optimization_bounds for keys.
+            metric_constraints: Hard inequality constraints on derived process
+                metrics from DopingProcessMetrics. Each MetricConstraint can
+                set a minimum, maximum, or both. Units: sheet_resistance in
+                ohm/sq, junction_depth_m in meters, beta2_um in microns,
+                retained_dose_cm2 in cm^-2, peak_concentration_cm3 in cm^-3.
+                When provided, optimization uses SLSQP by default; passing
+                method="L-BFGS-B" raises ValueError because L-BFGS-B cannot
+                enforce nonlinear constraints.
+            initial_states: Physical process state vectors to use as starts.
             n_random_starts: Number of additional random physical starts.
-            method: SciPy minimize method.
+            method: SciPy minimize method. If None, defaults to "L-BFGS-B"
+                without metric_constraints and "SLSQP" with them.
             log_dose: If true, optimize log10(dose) internally.
             random_seed: Optional seed for random starts.
 
         Returns:
             Optimization result with the optimized cantilever copy and metrics.
+
+        Raises:
+            ValueError: If metric_constraints are malformed, or method
+                "L-BFGS-B" is combined with metric_constraints.
+            RuntimeError: If no start produces a finite objective, or if no
+                start produces a feasible-and-successful result when
+                metric_constraints are supplied.
         """
         if n_random_starts < 0:
             raise ValueError("n_random_starts must be nonnegative.")
 
         if objective is None:
             objective = _default_doping_objective
+
+        if metric_constraints is None:
+            validated_constraints: tuple[MetricConstraint, ...] = ()
+        else:
+            validated_constraints = _validate_metric_constraints(metric_constraints)
+
+        if validated_constraints:
+            if method == "L-BFGS-B":
+                raise ValueError("L-BFGS-B cannot enforce nonlinear metric constraints; use SLSQP.")
+            resolved_method = method if method is not None else "SLSQP"
+        else:
+            resolved_method = method if method is not None else "L-BFGS-B"
 
         lower_bounds, upper_bounds = self.doping_optimization_bounds(parameter_constraints)
         optimizer_bounds, _, _ = self._optimizer_bounds(
@@ -719,28 +922,55 @@ class CantileverImplantation(Cantilever):
         if not physical_starts:
             physical_starts.append(self.doping_current_state())
 
-        def objective_from_optimizer_state(optimizer_state: np.ndarray) -> float:
+        def metrics_from_optimizer_state(optimizer_state: np.ndarray) -> DopingProcessMetrics:
             physical_state = self._to_physical_state(optimizer_state, log_dose, dose_bounds)
             candidate = self._copy_with_doping_state(physical_state)
-            metrics = candidate.doping_process_metrics(device_thickness_m)
-            return float(objective(metrics))
+            return candidate.doping_process_metrics(device_thickness_m)
+
+        def objective_from_optimizer_state(optimizer_state: np.ndarray) -> float:
+            return float(objective(metrics_from_optimizer_state(optimizer_state)))
+
+        slsqp_constraints = (
+            _build_slsqp_constraints(validated_constraints, metrics_from_optimizer_state)
+            if validated_constraints
+            else ()
+        )
 
         all_results: list[OptimizeResult] = []
         for physical_start in physical_starts:
             optimizer_start = self._to_optimizer_state(physical_start, log_dose)
+            minimize_kwargs: dict = {
+                "method": resolved_method,
+                "bounds": optimizer_bounds,
+            }
+            if slsqp_constraints:
+                minimize_kwargs["constraints"] = slsqp_constraints
             result = minimize(
                 objective_from_optimizer_state,
                 optimizer_start,
-                method=method,
-                bounds=optimizer_bounds,
+                **minimize_kwargs,
             )
             all_results.append(result)
 
-        finite_results = [result for result in all_results if np.isfinite(result.fun)]
-        if not finite_results:
-            raise RuntimeError("Doping optimization did not produce a finite objective value.")
+        if validated_constraints:
+            feasible_results: list[OptimizeResult] = []
+            for result in all_results:
+                if not result.success or not np.isfinite(result.fun):
+                    continue
+                candidate_metrics = metrics_from_optimizer_state(result.x)
+                if _constraints_satisfied(candidate_metrics, validated_constraints):
+                    feasible_results.append(result)
 
-        scipy_result = min(finite_results, key=lambda result: result.fun)
+            if not feasible_results:
+                raise RuntimeError("No feasible doping solution satisfies the metric constraints.")
+
+            scipy_result = min(feasible_results, key=lambda result: result.fun)
+        else:
+            finite_results = [result for result in all_results if np.isfinite(result.fun)]
+            if not finite_results:
+                raise RuntimeError("Doping optimization did not produce a finite objective value.")
+            scipy_result = min(finite_results, key=lambda result: result.fun)
+
         state = self._to_physical_state(scipy_result.x, log_dose, dose_bounds)
         optimized = self._copy_with_doping_state(state)
         metrics = optimized.doping_process_metrics(device_thickness_m)

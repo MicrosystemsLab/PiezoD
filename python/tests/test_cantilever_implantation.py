@@ -3,7 +3,11 @@
 import numpy as np
 import pytest
 
-from piezod.cantilever_implantation import CantileverImplantation
+from piezod.cantilever_implantation import (
+    CantileverImplantation,
+    DopingMetric,
+    MetricConstraint,
+)
 
 
 class TestCantileverImplantationInitialization:
@@ -705,7 +709,7 @@ class TestDopingOptimization:
         original_state = cantilever.doping_current_state().copy()
         starting_objective = self.default_objective(cantilever.doping_process_metrics())
 
-        result = cantilever.optimize_doping(log_dose=True)
+        result = cantilever.optimize_doping_for_hooge_noise(log_dose=True)
         lb, ub = cantilever.doping_optimization_bounds()
 
         assert result.objective_value <= starting_objective + 1e-8
@@ -719,7 +723,7 @@ class TestDopingOptimization:
         """Test lower and upper boundary starts stay valid for interpolation."""
         lb, ub = cantilever.doping_optimization_bounds()
 
-        result = cantilever.optimize_doping(
+        result = cantilever.optimize_doping_for_hooge_noise(
             initial_states=[lb, ub],
             log_dose=True,
         )
@@ -736,6 +740,199 @@ class TestDopingOptimization:
             "implantation_dose_at_min",
             "implantation_dose_at_max",
         }
+
+
+class TestMetricConstrainedDopingOptimization:
+    """Test metric_constraints in optimize_doping_for_hooge_noise."""
+
+    @pytest.fixture
+    def cantilever(self):
+        """Create a DopeDealer phosphorus cantilever for constrained optimization."""
+        return CantileverImplantation(
+            freq_min=1e3,
+            freq_max=1e6,
+            l=100e-6,
+            w=20e-6,
+            t=2e-6,
+            l_pr_ratio=0.5,
+            v_bridge=5.0,
+            doping_type="phosphorus",
+            annealing_time=3600,
+            annealing_temp=273.15 + 950,
+            annealing_type="inert",
+            implantation_energy=50,
+            implantation_dose=1e15,
+            lookup_source="dopedealer",
+        )
+
+    @pytest.mark.parametrize(
+        "constraint",
+        [
+            MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE),
+            MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=float("inf")),
+            MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, maximum=float("nan")),
+            MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=1000.0, maximum=100.0),
+        ],
+    )
+    def test_validation_rejects_bad_bounds(self, cantilever, constraint):
+        """Test malformed MetricConstraints raise ValueError."""
+        with pytest.raises(ValueError):
+            cantilever.optimize_doping_for_hooge_noise(metric_constraints=[constraint])
+
+    def test_validation_rejects_raw_string_metric(self, cantilever):
+        """Test passing a raw string instead of DopingMetric raises ValueError."""
+        bad = MetricConstraint(metric="sheet_resistance", minimum=300.0)
+        with pytest.raises(ValueError):
+            cantilever.optimize_doping_for_hooge_noise(metric_constraints=[bad])
+
+    def test_lbfgsb_with_metric_constraints_rejected(self, cantilever):
+        """Test L-BFGS-B with metric_constraints raises ValueError."""
+        constraints = [MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=300.0, maximum=900.0)]
+        with pytest.raises(ValueError, match="L-BFGS-B"):
+            cantilever.optimize_doping_for_hooge_noise(
+                metric_constraints=constraints,
+                method="L-BFGS-B",
+            )
+
+    def test_sheet_resistance_band_enforced(self, cantilever):
+        """Test SLSQP enforces sheet_resistance band on a feasible case."""
+        rs_min = 300.0
+        rs_max = 900.0
+        constraints = [MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=rs_min, maximum=rs_max)]
+
+        result = cantilever.optimize_doping_for_hooge_noise(
+            metric_constraints=constraints,
+            n_random_starts=3,
+            random_seed=0,
+            log_dose=True,
+        )
+
+        tol = 1e-6 * max(rs_max, rs_min)
+        assert rs_min - tol <= result.metrics.sheet_resistance <= rs_max + tol
+        assert result.scipy_result.success
+
+    def test_infeasible_metric_constraints_raise_runtimeerror(self, cantilever):
+        """Test impossible metric constraints raise RuntimeError."""
+        impossible = [MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=1e8, maximum=1e9)]
+        with pytest.raises(RuntimeError):
+            cantilever.optimize_doping_for_hooge_noise(
+                metric_constraints=impossible,
+                n_random_starts=2,
+                random_seed=0,
+            )
+
+    def test_original_cantilever_not_mutated(self, cantilever):
+        """Test the input cantilever is unchanged after a constrained run."""
+        snapshot = cantilever.doping_current_state().copy()
+        constraints = [MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=300.0, maximum=900.0)]
+
+        result = cantilever.optimize_doping_for_hooge_noise(
+            metric_constraints=constraints,
+            random_seed=0,
+        )
+
+        np.testing.assert_allclose(cantilever.doping_current_state(), snapshot)
+        assert result.optimized is not cantilever
+
+    def test_device_thickness_threads_into_beta_constraint(self, cantilever):
+        """Test device_thickness_m is used by beta-based metric constraints.
+
+        Pin process variables to a narrow window around the current state so the
+        optimizer cannot move significantly. Then beta is determined almost
+        entirely by device_thickness_m via beta = beta1 - 2*beta2_um/thickness_um.
+        A constraint feasible at one thickness must be infeasible at another.
+        """
+        state = cantilever.doping_current_state()
+        narrow = {
+            "min_annealing_time": float(state[0]) * 0.999,
+            "max_annealing_time": float(state[0]) * 1.001,
+            "min_annealing_temp": float(state[1]) - 0.1,
+            "max_annealing_temp": float(state[1]) + 0.1,
+            "min_implantation_energy": float(state[2]) * 0.999,
+            "max_implantation_energy": float(state[2]) * 1.001,
+            "min_implantation_dose": float(state[3]) * 0.999,
+            "max_implantation_dose": float(state[3]) * 1.001,
+        }
+
+        thin_metrics = cantilever.doping_process_metrics(device_thickness_m=2e-6)
+        thick_metrics = cantilever.doping_process_metrics(device_thickness_m=10e-6)
+        assert thin_metrics.beta != pytest.approx(thick_metrics.beta)
+
+        midpoint = thick_metrics.beta
+        half_band = abs(thick_metrics.beta - thin_metrics.beta) * 0.1
+        beta_min = midpoint - half_band
+        beta_max = midpoint + half_band
+
+        assert not (beta_min <= thin_metrics.beta <= beta_max)
+        assert beta_min <= thick_metrics.beta <= beta_max
+
+        constraints = [MetricConstraint(metric=DopingMetric.BETA, minimum=beta_min, maximum=beta_max)]
+
+        result_thick = cantilever.optimize_doping_for_hooge_noise(
+            metric_constraints=constraints,
+            parameter_constraints=narrow,
+            device_thickness_m=10e-6,
+            initial_states=[state],
+        )
+        assert beta_min - 1e-6 <= result_thick.metrics.beta <= beta_max + 1e-6
+
+        with pytest.raises(RuntimeError):
+            cantilever.optimize_doping_for_hooge_noise(
+                metric_constraints=constraints,
+                parameter_constraints=narrow,
+                device_thickness_m=2e-6,
+                initial_states=[state],
+            )
+
+    def test_multistart_prefers_feasible_over_lower_infeasible(self, cantilever, monkeypatch):
+        """Test selection picks feasible result over lower-objective infeasible one.
+
+        Monkeypatches scipy.optimize.minimize so two starts return crafted
+        OptimizeResults: a lower-objective infeasible one and a higher-objective
+        feasible one. Selection must return the feasible one even though its
+        objective is worse.
+        """
+        from scipy.optimize import OptimizeResult
+
+        import piezod.cantilever_implantation as impl_mod
+
+        state_low_rs = np.array([3600.0, 273.15 + 1050.0, 100.0, 5e16])
+        state_high_rs = np.array([3600.0, 273.15 + 900.0, 30.0, 5e13])
+
+        metrics_low_rs = cantilever._copy_with_doping_state(state_low_rs).doping_process_metrics()
+        metrics_high_rs = cantilever._copy_with_doping_state(state_high_rs).doping_process_metrics()
+
+        rs_min = (metrics_low_rs.sheet_resistance + metrics_high_rs.sheet_resistance) / 2
+        rs_max = metrics_high_rs.sheet_resistance * 2.0
+
+        assert metrics_low_rs.sheet_resistance < rs_min
+        assert rs_min <= metrics_high_rs.sheet_resistance <= rs_max
+
+        log_low = state_low_rs.copy()
+        log_low[3] = np.log10(log_low[3])
+        log_high = state_high_rs.copy()
+        log_high[3] = np.log10(log_high[3])
+
+        call_counter = {"n": 0}
+
+        def fake_minimize(fun, x0, **kwargs):
+            call_counter["n"] += 1
+            if call_counter["n"] == 1:
+                return OptimizeResult(x=log_low, fun=-100.0, success=True, status=0, message="ok", nit=1)
+            return OptimizeResult(x=log_high, fun=-50.0, success=True, status=0, message="ok", nit=1)
+
+        monkeypatch.setattr(impl_mod, "minimize", fake_minimize)
+
+        constraints = [MetricConstraint(metric=DopingMetric.SHEET_RESISTANCE, minimum=rs_min, maximum=rs_max)]
+        result = cantilever.optimize_doping_for_hooge_noise(
+            metric_constraints=constraints,
+            initial_states=[state_low_rs, state_high_rs],
+            log_dose=True,
+        )
+
+        assert result.objective_value == pytest.approx(-50.0)
+        assert rs_min <= result.metrics.sheet_resistance <= rs_max
+        assert call_counter["n"] == 2
 
 
 class TestInheritance:
