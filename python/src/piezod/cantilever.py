@@ -2048,8 +2048,8 @@ class Cantilever:
 
         i1 = np.nonzero(y > ybar)
         i2 = np.nonzero(y <= ybar)
-        y1 = y(i1)
-        y2 = y(i2)
+        y1 = y[i1]
+        y2 = y[i2]
         stress1 = stress[i1]
         stress2 = stress[i2]
 
@@ -2128,8 +2128,8 @@ class Cantilever:
         plt.plot(z * 1e9, k)
         plt.xlabel("Distance from Surface (nm)")
         plt.ylabel("k (W/m-K)")
-        plt.gca().set_ylim([0, 150])
-        plt.gca().set_xlim([0, self.t * 1e9])
+        plt.gca().set_ylim(0, 150)
+        plt.gca().set_xlim(0, self.t * 1e9)
 
     def plotDopantBending(self):
         x, C, theta, deflection = self.calculateDopantBending()
