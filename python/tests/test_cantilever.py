@@ -37,3 +37,18 @@ class TestCantileverMaterials:
         assert "boron" in Cantilever.dopantOptions
         assert "phosphorus" in Cantilever.dopantOptions
         assert "arsenic" in Cantilever.dopantOptions
+
+
+class TestSubstrateBackground:
+    """Test substrate background concentration default and override."""
+
+    def test_default_is_1e15(self) -> None:
+        """Default substrate background is 1e15 cm^-3."""
+        c = Cantilever()
+        assert c.substrate_background_cm3 == pytest.approx(1e15)
+
+    def test_attribute_is_writable(self) -> None:
+        """Users can override the background concentration."""
+        c = Cantilever()
+        c.substrate_background_cm3 = 5e16
+        assert c.substrate_background_cm3 == pytest.approx(5e16)

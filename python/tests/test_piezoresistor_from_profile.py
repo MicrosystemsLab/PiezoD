@@ -196,6 +196,89 @@ class TestPiAndDrOverR:
         np.testing.assert_allclose(result, beta * (pi_l * sigma_l + pi_t * sigma_t))
 
 
+class TestSubstrateBackground:
+    """Verify the substrate_background_cm3 kwarg drives net active carriers."""
+
+    def _kwargs(self) -> dict:
+        return {
+            "device_thickness_m": 2.5e-6,
+            "doping_type": "phosphorus",
+            "annealing_temp": 950 + 273.15,
+            "annealing_time": 3600,
+        }
+
+    def test_default_substrate_background(self) -> None:
+        depth = np.linspace(0, 1e-6, 50)
+        active = np.full_like(depth, 1e18)
+        pr = PiezoresistorFromProfile(depth_m=depth, active_cm3=active, **self._kwargs())
+        assert pr.substrate_background_cm3 == pytest.approx(1e15)
+
+    def test_negative_background_raises(self) -> None:
+        depth = np.linspace(0, 1e-6, 50)
+        active = np.full_like(depth, 1e18)
+        with pytest.raises(ValueError, match="substrate_background_cm3 must be nonnegative"):
+            PiezoresistorFromProfile(
+                depth_m=depth,
+                active_cm3=active,
+                substrate_background_cm3=-1.0,
+                **self._kwargs(),
+            )
+
+    def test_net_active_subtracts_background(self) -> None:
+        depth = np.linspace(0, 1e-6, 50)
+        active = np.full_like(depth, 1e18)
+        pr = PiezoresistorFromProfile(
+            depth_m=depth,
+            active_cm3=active,
+            substrate_background_cm3=2e16,
+            **self._kwargs(),
+        )
+        np.testing.assert_allclose(pr.net_active_cm3(), np.full_like(depth, 1e18 - 2e16))
+
+    def test_total_cm3_floors_at_substrate(self) -> None:
+        """`total_cm3()` floors at substrate background where the dopant decays."""
+        depth = np.linspace(0, 1e-6, 200)
+        # Linear ramp 1e19 -> 1e14
+        active = np.linspace(1e19, 1e14, 200)
+        pr = PiezoresistorFromProfile(
+            depth_m=depth,
+            active_cm3=active,
+            substrate_background_cm3=1e16,
+            **self._kwargs(),
+        )
+        total = pr.total_cm3()
+        assert total[-1] == pytest.approx(1e16)
+        # Where dopant > substrate, total == dopant.
+        above = active > 1e16
+        np.testing.assert_allclose(total[above], active[above])
+
+    def test_junction_depth_tracks_background(self) -> None:
+        # Linear ramp from 1e19 down to 1e14 across 1 um
+        depth = np.linspace(0, 1e-6, 501)
+        active = np.linspace(1e19, 1e14, 501)
+        pr = PiezoresistorFromProfile(
+            depth_m=depth,
+            active_cm3=active,
+            substrate_background_cm3=1e17,
+            **self._kwargs(),
+        )
+        # Junction is where the dopant equals 1e17 -- by linear interp,
+        # x = (1e19 - 1e17) / (1e19 - 1e14) * 1um ~= 0.99 um.
+        expected = (1e19 - 1e17) / (1e19 - 1e14) * 1e-6
+        assert pr.junction_depth == pytest.approx(expected, rel=1e-3)
+
+    def test_higher_background_increases_sheet_resistance(self) -> None:
+        depth = np.linspace(0, 1e-6, 50)
+        active = np.full_like(depth, 1e18)
+        pr_low = PiezoresistorFromProfile(
+            depth_m=depth, active_cm3=active, substrate_background_cm3=1e15, **self._kwargs()
+        )
+        pr_high = PiezoresistorFromProfile(
+            depth_m=depth, active_cm3=active, substrate_background_cm3=5e17, **self._kwargs()
+        )
+        assert pr_high.sheet_resistance() > pr_low.sheet_resistance()
+
+
 class TestHoogeAlphaHelper:
     def test_helper_matches_implantation_alpha(self, proto1_implantation: CantileverImplantation) -> None:
         c = proto1_implantation

@@ -606,11 +606,20 @@ class TestLookupTableInterpolation:
         assert len(x) == len(active)
         assert len(x) == len(total)
 
-        # Check values are reasonable
+        # Sanity: depth in range, total floors at substrate, net active >= 0.
         assert np.all(x >= 0)
         assert np.all(x <= cantilever.t)
-        assert np.all(active > 0)
-        assert np.all(total > 0)
+        assert np.all(active >= 0)
+        assert np.all(total >= cantilever.substrate_background_cm3)
+        # Surface should sit well above background.
+        assert active[0] > 0
+        # Above the junction (active > 0), total - active equals substrate background.
+        above = active > 0
+        assert np.any(above)
+        np.testing.assert_allclose(
+            total[above] - active[above],
+            np.full(above.sum(), cantilever.substrate_background_cm3),
+        )
 
     def test_doping_profile_truncated_at_thickness(self, cantilever):
         """Test doping profile is truncated at device thickness."""
@@ -989,3 +998,65 @@ class TestInheritance:
 
         assert hasattr(cantilever, "dopantNumber")
         assert cantilever.dopantNumber() == 1  # boron = 1
+
+
+class TestSubstrateBackgroundConvention:
+    """Both lookup sources expose dopant species only (TSUPREM background subtracted)."""
+
+    def _params(self) -> dict:
+        return {
+            "freq_min": 1e3,
+            "freq_max": 1e6,
+            "l": 100e-6,
+            "w": 20e-6,
+            "t": 5e-6,
+            "l_pr_ratio": 0.5,
+            "v_bridge": 5.0,
+            "doping_type": "phosphorus",
+            "annealing_time": 60 * 60,
+            "annealing_temp": 273.15 + 1000,
+            "annealing_type": "inert",
+            "implantation_energy": 50,
+            "implantation_dose": 2e15,
+        }
+
+    def test_tsuprem_total_floors_at_substrate(self) -> None:
+        """After load-time normalization, TSUPREM total floors at substrate background."""
+        c = CantileverImplantation(**self._params(), lookup_source="tsuprem4")
+        _, _, total = c.doping_profile()
+        # Was ~1.36e15 at depth before normalization; now floors at the
+        # cantilever's substrate_background_cm3 (default 1e15).
+        assert total[-1] == pytest.approx(c.substrate_background_cm3)
+        assert total[0] > 1e3 * total[-1]
+
+    def test_dopedealer_total_floors_at_substrate(self) -> None:
+        """DopeDealer profile (dopant-only) floors at substrate background."""
+        c = CantileverImplantation(**self._params(), lookup_source="dopedealer")
+        _, _, total = c.doping_profile()
+        assert total[-1] == pytest.approx(c.substrate_background_cm3)
+
+    def test_user_background_shifts_floor_and_active(self) -> None:
+        """Setting substrate_background_cm3 shifts the total floor and the net active offset."""
+        c = CantileverImplantation(**self._params(), lookup_source="dopedealer")
+        _, active_default, total_default = c.doping_profile()
+        # Reconstruct dopant species from default floor.
+        default_bg = c.substrate_background_cm3
+        dopant = total_default - default_bg + active_default
+        # Where dopant was below default_bg, total floors at default_bg and active=0;
+        # reconstruct dopant at those points as default_bg + active = default_bg.
+        # Use the simpler invariant via custom background instead.
+
+        c.substrate_background_cm3 = 5e16
+        _, active_custom, total_custom = c.doping_profile()
+        # Total floors at the new substrate background.
+        assert total_custom[-1] == pytest.approx(5e16)
+        # Above the new junction, total - active equals new substrate.
+        above = active_custom > 0
+        if above.any():
+            np.testing.assert_allclose(
+                total_custom[above] - active_custom[above],
+                np.full(above.sum(), 5e16),
+            )
+        # Net active drops at every depth where the new background exceeds dopant.
+        assert np.all(active_custom <= active_default + 1e-6)
+        assert dopant[0] > 0  # sanity, ensure variable used

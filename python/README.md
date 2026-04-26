@@ -67,6 +67,29 @@ Type check:
 uvx ty check src
 ```
 
+## Doping profile convention
+
+`doping_profile()` on every cantilever subclass returns
+`(z, active_doping, total_doping)`:
+
+- `total_doping`: total concentration `max(dopant_species,
+  substrate_background_cm3)` (cm^-3). Floors at the substrate so plotting code
+  shows the implant peak rolling down into the substrate floor directly.
+- `active_doping`: net active resistor carriers (cm^-3) =
+  `max(0, electrically_active_dopant - substrate_background_cm3)`. Goes to zero
+  below the junction. Used internally by all carrier integrals
+  (`Nz`, `sheet_resistance`, `beta`).
+
+The substrate is always counter-doped to the piezoresistor. Set the substrate
+concentration via the `substrate_background_cm3` attribute on `Cantilever` (or
+the equivalent kwarg on `PiezoresistorFromProfile`); the default is 1e15 cm^-3.
+The TSUPREM-4 lookup table's baked-in 1.36e15 cm^-3 substrate is subtracted at
+load time so the `tsuprem4` and `dopedealer` sources share the same underlying
+dopant convention.
+
+Use `cantilever.plot_doping_profile()` for a quick total + net active overlay
+with the junction marked.
+
 ## Documentation
 
 See the main project documentation at [github.com/MicrosystemsLab/PiezoD](https://github.com/MicrosystemsLab/PiezoD).

@@ -78,58 +78,54 @@ class CantileverEpitaxy(Cantilever):
         return self.t * self.t_pr_ratio
 
     def doping_profile(self) -> Tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
-        """Calculate the electrically active dopant concentration profile.
-
-        Returns a step-function profile with constant doping in the epitaxial
-        layer and background concentration in the substrate.
+        """Step-function doping profile from epitaxial growth.
 
         Returns:
             Tuple of (z, active_doping, total_doping) where:
-                z: Depth coordinates from surface (m)
-                active_doping: Electrically active dopant concentration (cm^-3)
-                total_doping: Total dopant concentration (cm^-3)
+                z: Depth coordinates from surface (m).
+                active_doping: Net active carriers of the resistor type (cm^-3).
+                    Equals ``dopant_concentration - substrate_background_cm3`` in
+                    the epi layer (clipped at 0) and 0 in the substrate.
+                total_doping: Total concentration (cm^-3) -- the epi dopant
+                    inside the layer, the substrate background below.
         """
         n_points = self.numZPoints
         z = np.linspace(0, self.t, n_points)
 
-        # Initialize to background concentration
-        background_concentration = 1e15
-        active_doping = np.ones(n_points) * background_concentration
-
-        # Fill in epitaxial region (assume active = total for epitaxy)
-        active_doping[z <= self.junction_depth] = self.dopant_concentration
-        total_doping = active_doping.copy()
+        in_epi = z <= self.junction_depth
+        total_doping = np.where(in_epi, self.dopant_concentration, self.substrate_background_cm3)
+        net_active = max(0.0, self.dopant_concentration - self.substrate_background_cm3)
+        active_doping = np.where(in_epi, net_active, 0.0)
 
         return z, active_doping, total_doping
 
     def sheet_resistance(self) -> float:
         """Calculate sheet resistance of the piezoresistor.
 
-        Uses the conductivity at the epitaxial doping concentration and
-        junction depth to compute sheet resistance.
+        Uses the conductivity at the net active carrier concentration in the
+        epi layer (``dopant_concentration - substrate_background_cm3``) and the
+        epi-layer thickness.
 
         Returns:
             Sheet resistance (ohms/square)
         """
-        # Get conductivity in ohm-cm
-        conductivity = self.conductivity(self.dopant_concentration)
-
-        # Convert junction depth to cm and calculate sheet resistance
+        net_active = max(0.0, self.dopant_concentration - self.substrate_background_cm3)
+        conductivity = self.conductivity(net_active)
         junction_depth_cm = self.junction_depth * 1e2
-        Rs = 1.0 / (junction_depth_cm * conductivity)
-
-        return Rs
+        return 1.0 / (junction_depth_cm * conductivity)
 
     def Nz(self) -> float:
-        """Calculate integrated carrier concentration per unit area.
+        """Integrated carrier concentration per unit area.
 
-        For a constant concentration epitaxial layer, this is simply the
-        product of junction depth and dopant concentration.
+        Net active carriers in the epi layer
+        (``dopant_concentration - substrate_background_cm3``, clipped at 0)
+        times the epi-layer thickness.
 
         Returns:
             Integrated carrier concentration (carriers/m^2)
         """
-        return self.junction_depth * self.dopant_concentration * 1e6
+        net_active = max(0.0, self.dopant_concentration - self.substrate_background_cm3)
+        return self.junction_depth * net_active * 1e6
 
     def alpha(self) -> float:
         """Calculate Hooge noise parameter.

@@ -96,8 +96,19 @@ class TestDopingProfile:
         assert active_doping[0] > active_doping[-1]
         assert total_doping[0] > total_doping[-1]
 
-        # Check that active and total are equal for arsenic
-        np.testing.assert_array_almost_equal(active_doping, total_doping)
+        # Total doping floors at substrate background.
+        assert np.all(total_doping >= cant.substrate_background_cm3)
+
+        # Net active = max(0, dopant - substrate_background); active and total
+        # are both >= 0 with active <= total - substrate at depth.
+        assert np.all(active_doping >= 0)
+        # Above the junction (where dopant > background), total - active equals
+        # the substrate background.
+        above = active_doping > 0
+        np.testing.assert_array_almost_equal(
+            (total_doping[above] - active_doping[above]),
+            np.full(above.sum(), cant.substrate_background_cm3),
+        )
 
         # Surface concentration should be high
         assert active_doping[0] > 1e19
@@ -130,8 +141,13 @@ class TestDopingProfile:
         # Check monotonic decrease
         assert active_doping[0] > active_doping[-1]
 
-        # Check that active and total are equal for boron
-        np.testing.assert_array_almost_equal(active_doping, total_doping)
+        # Total floors at substrate; active is total - substrate above the junction.
+        assert np.all(total_doping >= cant.substrate_background_cm3)
+        above = active_doping > 0
+        np.testing.assert_array_almost_equal(
+            (total_doping[above] - active_doping[above]),
+            np.full(above.sum(), cant.substrate_background_cm3),
+        )
 
     def test_phosphorus_profile(self) -> None:
         """Test phosphorus diffusion profile calculation."""
@@ -161,14 +177,20 @@ class TestDopingProfile:
         # Check that doping decreases with depth
         assert total_doping[0] > total_doping[-1]
 
-        # Active should be less than or equal to total
-        assert np.all(active_doping <= total_doping)
-
-        # Check background doping floor
-        assert np.all(total_doping >= 1e15)
+        # Net active carriers nonnegative; total floors at substrate.
+        assert np.all(active_doping >= 0)
+        assert np.all(total_doping >= cant.substrate_background_cm3)
 
         # Surface concentration should be very high for phosphorus
         assert total_doping[0] > 1e20
+
+        # The phosphorus model has a solid-solubility cap on active dopant, so
+        # total - active != substrate_background at the surface. Just verify
+        # that where dopant has decayed below substrate, total floors at the
+        # substrate background and active is zero.
+        below = active_doping == 0
+        if below.any():
+            assert np.all(total_doping[below] == pytest.approx(cant.substrate_background_cm3))
 
     def test_phosphorus_low_temp(self) -> None:
         """Test phosphorus diffusion at low temperature (no time offset)."""
@@ -188,7 +210,8 @@ class TestDopingProfile:
 
         # Should still produce valid profile
         assert len(x) == cant.numZPoints
-        assert np.all(total_doping >= 1e15)
+        assert np.all(total_doping >= cant.substrate_background_cm3)
+        assert np.all(active_doping >= 0)
 
     def test_invalid_doping_type(self) -> None:
         """Test that invalid doping type raises ValueError."""

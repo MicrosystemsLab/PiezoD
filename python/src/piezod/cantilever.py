@@ -558,6 +558,20 @@ class Cantilever:
 
     # Abstract methods
     def doping_profile(self):
+        """Return the depth-resolved doping profile.
+
+        Subclasses return ``(z, active_doping, total_doping)`` where:
+            - ``z``: depth from the resistor surface (m), increasing into the substrate.
+            - ``active_doping``: net active carrier concentration of the resistor type
+              (cm^-3), i.e. ``max(0, electrically_active_dopant - substrate_background_cm3)``.
+              Goes to zero below the junction. Used for mobility / conductivity /
+              piezoresistance integrals.
+            - ``total_doping``: total concentration ``max(dopant_species,
+              substrate_background_cm3)`` (cm^-3) -- the SIMS-like magnitude that
+              shows the implant peak rolling down into the substrate floor. The
+              species type changes at the junction (resistor type above,
+              substrate type below); this curve plots the magnitude only.
+        """
         raise NotImplementedError("Implement doping_profile() in your Cantilever subclass")
 
     def doping_optimization_scaling(self):
@@ -713,6 +727,12 @@ class Cantilever:
         self.thermal_modeling = "none"
         self.R_base = 10e3
         self.R_heater = 1e3
+
+        # Substrate background concentration (cm^-3). The substrate is always
+        # counter-doped to the piezoresistor; this value is subtracted from the
+        # dopant species profile to obtain the net active carriers used by the
+        # resistor integrals (Nz, sheet resistance, beta).
+        self.substrate_background_cm3: float = 1e15
 
     def l_pr(self):
         return self.l * self.l_pr_ratio
@@ -914,7 +934,9 @@ class Cantilever:
     ## Calculate Rsheet(x) assuming temperature dependent cantilever properties (ohm/sq)
     def RSheetProfile(self, x, T_x):
         z, active_doping, total_doping = self.doping_profile()  # Units: z -> m, doping -> N/cm^3
-        n_z_x = np.transpose(total_doping) * np.ones((1, self.numXPoints))
+        # Net active carriers drive resistor conductivity; integrand is zero
+        # below the junction so the profile naturally truncates there.
+        n_z_x = np.transpose(active_doping) * np.ones((1, self.numXPoints))
 
         # Generate a numZPoints x numXPoints matrix
         if len(T_x) == 1:
@@ -2115,9 +2137,10 @@ class Cantilever:
         width = self.w  # But it doesn't matter
         thickness = self.t
 
-        # Shift coordinates so that strain is measured from the bottom
+        # Shift coordinates so that strain is measured from the bottom.
+        # Lattice strain depends on dopant atom count, not net carriers.
         y = np.linspace(0, thickness, depth.size).transpose()
-        dopant_concentration = np.flipud(active_doping)
+        dopant_concentration = np.flipud(total_doping)
 
         strain = dopant_concentration * delta
         stress = strain * E
@@ -2200,6 +2223,32 @@ class Cantilever:
         plt.xlabel(r"Distance from base ($\mu$m)")
         plt.ylabel(r"$\Delta$T (K)")
         plt.box(False)
+
+    def plot_doping_profile(self):
+        """Plot the total doping magnitude and the net active carriers.
+
+        ``total_doping`` already floors at ``substrate_background_cm3`` so the
+        substrate region is visible directly. ``active_doping`` is overlaid to
+        show the carriers contributing to resistor current; it goes to zero
+        below the junction.
+        """
+        z, active_doping, total_doping = self.doping_profile()
+        z_nm = np.asarray(z) * 1e9
+
+        plt.figure()
+        plt.semilogy(z_nm, total_doping, label="Total dopant")
+        plt.semilogy(z_nm, np.maximum(active_doping, 1.0), label="Net active carriers")
+        xj_attr = getattr(self, "junction_depth", None)
+        if xj_attr is not None:
+            try:
+                xj = float(xj_attr)
+                if 0.0 < xj <= float(z[-1]):
+                    plt.axvline(xj * 1e9, color="green", linestyle="--", label="Junction")
+            except (NotImplementedError, ValueError, TypeError):
+                pass
+        plt.xlabel("Depth (nm)")
+        plt.ylabel(r"Concentration (cm$^{-3}$)")
+        plt.legend()
 
     def plot_thermal_conductivity_profile(self):
         x, z, k = self.thermal_conductivity_profile(self.T)

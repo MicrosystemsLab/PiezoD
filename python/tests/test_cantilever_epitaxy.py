@@ -112,33 +112,41 @@ class TestDopingProfile:
         assert z[-1] == pytest.approx(1e-6)
 
     def test_doping_profile_step_function(self) -> None:
-        """Test profile is a step function at junction depth."""
+        """Test profile is a step function at the junction depth."""
         cant = CantileverEpitaxy(t=1e-6, t_pr_ratio=0.3, dopant_concentration=1e19)
         z, active, total = cant.doping_profile()
 
-        # Points below junction should have epitaxial concentration
+        # Total: epi concentration above junction, substrate background below.
         epitaxial_points = z <= cant.junction_depth
-        assert np.all(active[epitaxial_points] == 1e19)
-
-        # Points above junction should have background concentration
         substrate_points = z > cant.junction_depth
+        assert np.all(total[epitaxial_points] == 1e19)
         if np.any(substrate_points):
-            assert np.all(active[substrate_points] == 1e15)
+            assert np.all(total[substrate_points] == cant.substrate_background_cm3)
 
-    def test_doping_profile_active_equals_total(self) -> None:
-        """Test active doping equals total doping for epitaxy."""
-        cant = CantileverEpitaxy()
-        _, active, total = cant.doping_profile()
+        # Net active: dopant - substrate in epi, 0 below.
+        expected_net = 1e19 - cant.substrate_background_cm3
+        assert np.all(active[epitaxial_points] == pytest.approx(expected_net))
+        if np.any(substrate_points):
+            assert np.all(active[substrate_points] == 0.0)
 
-        np.testing.assert_array_equal(active, total)
-
-    def test_doping_profile_background_concentration(self) -> None:
-        """Test background concentration is 1e15."""
+    def test_doping_profile_substrate_floors_total(self) -> None:
+        """Total doping floors at substrate background in the substrate region."""
         cant = CantileverEpitaxy(t=1e-6, t_pr_ratio=0.1)
-        z, active, _ = cant.doping_profile()
+        z, active, total = cant.doping_profile()
+        # Last point should be in the substrate
+        assert total[-1] == pytest.approx(cant.substrate_background_cm3)
+        assert active[-1] == pytest.approx(0.0)
 
-        # Last point should be in substrate
-        assert active[-1] == pytest.approx(1e15)
+    def test_doping_profile_custom_background(self) -> None:
+        """Net active and total track a user-set substrate background."""
+        cant = CantileverEpitaxy(t=1e-6, t_pr_ratio=0.3, dopant_concentration=1e18)
+        cant.substrate_background_cm3 = 5e16
+        z, active, total = cant.doping_profile()
+        epitaxial_points = z <= cant.junction_depth
+        substrate_points = z > cant.junction_depth
+        assert np.all(active[epitaxial_points] == pytest.approx(1e18 - 5e16))
+        if np.any(substrate_points):
+            assert np.all(total[substrate_points] == pytest.approx(5e16))
 
 
 class TestSheetResistance:
@@ -197,21 +205,24 @@ class TestNz:
         cant = CantileverEpitaxy(t=1e-6, t_pr_ratio=0.3, dopant_concentration=1e19)
         Nz = cant.Nz()
 
-        # Nz = junction_depth * dopant_concentration * 1e6
+        # Nz = junction_depth * (dopant - substrate_background) * 1e6
         # junction_depth = 1e-6 * 0.3 = 3e-7 m
-        # Nz = 3e-7 * 1e19 * 1e6 = 3e18 carriers/m^2
-        expected = 0.3e-6 * 1e19 * 1e6
+        net_active = 1e19 - cant.substrate_background_cm3
+        expected = 0.3e-6 * net_active * 1e6
         assert Nz == pytest.approx(expected)
 
-    def test_Nz_scales_with_concentration(self) -> None:
-        """Test Nz scales linearly with dopant concentration."""
+    def test_Nz_scales_with_net_active_concentration(self) -> None:
+        """Nz scales linearly with the net active carrier concentration."""
         cant1 = CantileverEpitaxy(dopant_concentration=1e18)
         cant2 = CantileverEpitaxy(dopant_concentration=2e18)
 
         Nz1 = cant1.Nz()
         Nz2 = cant2.Nz()
 
-        assert Nz2 == pytest.approx(2 * Nz1)
+        background = cant1.substrate_background_cm3
+        net1 = 1e18 - background
+        net2 = 2e18 - background
+        assert Nz2 == pytest.approx(Nz1 * net2 / net1)
 
 
 class TestAlpha:

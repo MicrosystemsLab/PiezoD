@@ -84,16 +84,20 @@ class CantileverDiffusion(Cantilever):
         Returns:
             Tuple of (x, active_doping, total_doping) where:
                 x: Position array from surface into silicon (m).
-                active_doping: Electrically active dopant concentration (1/cm^3).
-                total_doping: Total dopant concentration (1/cm^3).
+                active_doping: Net active carriers of the resistor type (cm^-3) =
+                    ``max(0, electrically_active_dopant - substrate_background_cm3)``.
+                    Goes to zero below the junction.
+                total_doping: Total concentration ``max(dopant_species,
+                    substrate_background_cm3)`` (cm^-3); floors at the substrate
+                    so the profile is directly plottable.
 
         References:
             - Arsenic/Boron: Simple erfc profile from Fick's law
             - Phosphorus: Tsai model for POCl3 diffusion (J. Electrochem. Soc., 1983)
         """
-        N_background = 1e15  # Background doping (1/cm^3)
         N_surface = 1e20  # Surface concentration for arsenic/boron (1/cm^3)
         n_points = self.numZPoints
+        background = self.substrate_background_cm3
 
         if self.doping_type == "arsenic":
             # Arsenic diffusion parameters
@@ -108,8 +112,9 @@ class CantileverDiffusion(Cantilever):
             x = np.linspace(0, self.t, n_points)
 
             # Complementary error function profile
-            active_doping = N_surface * erfc(x / (2 * diffusion_length))
-            total_doping = active_doping.copy()
+            dopant = N_surface * erfc(x / (2 * diffusion_length))
+            total_doping = np.maximum(dopant, background)
+            active_doping = np.maximum(0.0, dopant - background)
 
         elif self.doping_type == "boron":
             # Boron diffusion parameters
@@ -124,8 +129,9 @@ class CantileverDiffusion(Cantilever):
             x = np.linspace(0, self.t, n_points)
 
             # Complementary error function profile
-            active_doping = N_surface * erfc(x / (2 * diffusion_length))
-            total_doping = active_doping.copy()
+            dopant = N_surface * erfc(x / (2 * diffusion_length))
+            total_doping = np.maximum(dopant, background)
+            active_doping = np.maximum(0.0, dopant - background)
 
         elif self.doping_type == "phosphorus":
             # Phosphorus diffusion using Tsai model for POCl3
@@ -165,15 +171,14 @@ class CantileverDiffusion(Cantilever):
             Ca = (1 - kappa) / 2 * surface_concentration_total * np.exp(-alpha / (2 * Da) * (x - alpha * t)) * F1
             Cb_profile = kappa / 2 * surface_concentration_total * np.exp(-alpha / (2 * Db) * (x - alpha * t)) * F2
 
-            # Total concentration with background doping floor
-            C_total = Ca + Cb_profile
-            C_total = np.maximum(C_total, N_background)
-            C_total[x <= x0] = surface_concentration_total
-            total_doping = C_total
+            # Dopant species (no floor) and active concentration limited by
+            # solid solubility.
+            dopant = Ca + Cb_profile
+            dopant[x <= x0] = surface_concentration_total
+            total_doping = np.maximum(dopant, background)
 
-            # Active concentration limited by solid solubility
-            C_active = np.minimum(C_total, surface_concentration_active)
-            active_doping = C_active
+            C_active = np.minimum(dopant, surface_concentration_active)
+            active_doping = np.maximum(0.0, C_active - background)
 
             # Convert back to meters
             x = x * 1e-2  # cm -> m
@@ -226,18 +231,26 @@ class CantileverDiffusion(Cantilever):
 
     @property
     def junction_depth(self) -> float:
-        """Calculate junction depth where doping equals background level.
+        """Junction depth where active carriers fall to zero.
 
-        Returns:
-            Junction depth (m) where active doping reaches 1e15 cm^-3.
+        Linear interpolation of where ``active_doping`` crosses zero (i.e. where
+        the dopant species drops to ``substrate_background_cm3``). Returns the
+        deepest sample if ``active_doping`` never reaches zero.
         """
-        x, active_doping, total_doping = self.doping_profile()
-        # Find first position where doping equals background (1e15)
-        idx = np.where(active_doping == 1e15)[0]
-        if len(idx) > 0:
-            return x[idx[0]]
-        # If not found, return the maximum depth
-        return x[-1]
+        x, active_doping, _ = self.doping_profile()
+        below = active_doping <= 0
+        if not np.any(below):
+            return float(x[-1])
+        first = int(np.argmax(below))
+        if first == 0:
+            return float(x[0])
+        # Linear interpolation between the bracketing samples (active_doping
+        # is positive at first-1 and zero at first).
+        x0, x1 = x[first - 1], x[first]
+        a0, a1 = active_doping[first - 1], active_doping[first]
+        if a0 == a1:
+            return float(x0)
+        return float(x0 + (x1 - x0) * a0 / (a0 - a1))
 
     def alpha(self) -> float:
         """Return Hooge parameter for 1/f noise modeling.

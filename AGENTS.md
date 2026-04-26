@@ -122,3 +122,30 @@ PiezoD/
 ## Plotting
 
 - For python, include `addcopyfighandler` for easy matplotlib copy/paste
+
+## Doping profile convention
+
+`doping_profile()` returns `(z, active_doping, total_doping)` where:
+
+- `total_doping`: total concentration `max(dopant_species,
+  substrate_background_cm3)` (cm^-3). The SIMS-like magnitude that floors at the
+  substrate so the implant peak rolls down into a visible substrate floor. This
+  is what plotting code should display directly. The species type changes at the
+  junction (resistor type above, substrate type below); the curve only carries
+  the magnitude.
+- `active_doping`: net active resistor carriers (cm^-3) =
+  `max(0, electrically_active_dopant - substrate_background_cm3)`. Goes to zero
+  below the junction. Used by all carrier integrals (`Nz`, `sheet_resistance`,
+  `beta`, `RSheetProfile`) so they naturally truncate at the junction.
+
+The substrate is always counter-doped to the piezoresistor; concentration is
+set by `Cantilever.substrate_background_cm3` (default 1e15 cm^-3) or via the
+`substrate_background_cm3` kwarg on `PiezoresistorFromProfile`.
+
+The TSUPREM-4 lookup table was generated with a baked-in 1.36e15 cm^-3
+substrate; this constant is subtracted at table-load time so both lookup
+sources (`tsuprem4`, `dopedealer`) share the same dopant-only underlying
+profile before the user-set substrate floor is reapplied. Lookup-table metrics
+on `CantileverImplantation` (`Rs`, `Nz`, `Xj`, `Beta1`, `Beta2`) still embed
+the simulator's substrate assumption -- to recompute against a different
+background, feed the profile into `PiezoresistorFromProfile`.

@@ -82,6 +82,15 @@ _LOOKUP_FILENAMES: dict[str, str] = {
     "dopedealer": "ionImplantLookupTable_dopedealer.h5",
 }
 
+# The TSUPREM-4 lookup tables were generated with a uniform substrate
+# background of ~1.36e15 cm^-3 (same dopant species as the implant) baked
+# into every simulation, so the stored `n` is dopant + 1.36e15. The DopeDealer
+# tables have no baked-in background. We subtract the constant at load time
+# so both sources expose the dopant species alone, matching the
+# `doping_profile()` convention. Verified empirically: tail values of `n`
+# cluster at ~1.36e15 across most TSUPREM parameter combinations.
+_TSUPREM_BAKED_BACKGROUND_CM3: float = 1.36e15
+
 _DOPING_STATE_NAMES: tuple[str, ...] = (
     "annealing_time",
     "annealing_temp",
@@ -378,8 +387,12 @@ def _load_lookup_table(source: str) -> dict:
         resources.files("piezod.data").joinpath(filename).open("rb") as f,
         h5py.File(f, "r") as hf,
     ):
-        _LOOKUP_TABLE_CACHE[source] = {key: np.array(hf[key]) for key in hf}
+        data = {key: np.array(hf[key]) for key in hf}
 
+    if source == "tsuprem4":
+        data["n"] = np.maximum(data["n"].astype(np.float64) - _TSUPREM_BAKED_BACKGROUND_CM3, 0.0)
+
+    _LOOKUP_TABLE_CACHE[source] = data
     return _LOOKUP_TABLE_CACHE[source]
 
 
@@ -529,18 +542,28 @@ class CantileverImplantation(Cantilever):
         return float(result[0])
 
     def doping_profile(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Lookup the concentration profile from the lookup table.
+        """Lookup the doping profile from the lookup table.
 
         Returns:
             Tuple of (x, active_doping, total_doping):
-                - x: Depth from surface (m)
-                - active_doping: Active dopant concentration (cm^-3)
-                - total_doping: Total dopant concentration (cm^-3)
+                - x: Depth from surface (m).
+                - active_doping: Net active carriers of the resistor type
+                  (cm^-3) = ``max(0, dopant_species - substrate_background_cm3)``.
+                  Goes to zero below the junction.
+                - total_doping: Total concentration ``max(dopant_species,
+                  substrate_background_cm3)`` (cm^-3); floors at the substrate
+                  background so the profile is directly plottable.
 
         Note:
-            Active = total unless the doping is higher than the solid solubility
-            limit, which is generally not the case in the ion implantation data.
-            Data beyond the device thickness is removed.
+            For the TSUPREM-4 lookup, the simulator's baked-in 1.36e15 cm^-3
+            substrate is removed at table-load time so the underlying dopant
+            species curve matches the DopeDealer convention before the
+            substrate floor is reapplied. The lookup-table-derived metrics
+            (Rs, Nz, Xj, Beta1, Beta2) still embed the simulator's substrate
+            assumption and are unaffected by ``substrate_background_cm3``; for
+            metrics that track a custom background, pass this profile to
+            :class:`PiezoresistorFromProfile`. Data beyond the device
+            thickness is removed.
         """
         x = self._lookup_data["z"] * 1e-6  # Convert from microns to meters
 
@@ -578,8 +601,8 @@ class CantileverImplantation(Cantilever):
         x = x[mask]
         n = n[mask]
 
-        active_doping = n
-        total_doping = n
+        total_doping = np.maximum(n, self.substrate_background_cm3)
+        active_doping = np.maximum(0.0, n - self.substrate_background_cm3)
 
         return x, active_doping, total_doping
 
@@ -656,7 +679,7 @@ class CantileverImplantation(Cantilever):
         beta2_um = self._interpolate_lookup("Beta2")
         beta = beta1 - 2 * beta2_um / device_thickness_um
 
-        depth_m, active_doping, _total_doping = self.doping_profile()
+        depth_m, _active_doping, total_doping = self.doping_profile()
         depth_cm = depth_m * 100
 
         return DopingProcessMetrics(
@@ -667,8 +690,8 @@ class CantileverImplantation(Cantilever):
             beta=float(beta),
             sheet_resistance=float(self.sheet_resistance()),
             junction_depth_m=float(self.junction_depth),
-            peak_concentration_cm3=float(np.max(active_doping)),
-            retained_dose_cm2=float(np.trapezoid(active_doping, depth_cm)),
+            peak_concentration_cm3=float(np.max(total_doping)),
+            retained_dose_cm2=float(np.trapezoid(total_doping, depth_cm)),
         )
 
     # ========= Optimization Methods ==========
