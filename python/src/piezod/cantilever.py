@@ -2,7 +2,15 @@ import math
 
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy import integrate, interpolate, optimize
+
+from piezod.piezoresistance import (
+    CrystalOrientation,
+    default_orientation,
+    pi_low_doping,
+    rotate_in_plane_stress,
+)
 
 
 class Cantilever:
@@ -661,6 +669,7 @@ class Cantilever:
     def __init__(self):
         # Initialize with reasonable defaults
         self.doping_type = "phosphorus"
+        self.crystal_orientation: CrystalOrientation | None = None
         self.freq_min = 1
         self.freq_max = 1e3
         self.l = 100e-6
@@ -1142,15 +1151,96 @@ class Cantilever:
             ** -1
         )
 
-    # Low concentration longitudinal piezoresistance coefficient (1/Pa)
-    def max_piezoresistance_factor(self):
-        if self.doping_type == "boron":
-            max_factor = 72e-11  # 110 direction
-        elif self.doping_type == "phosphorus":
-            max_factor = 103e-11  # 100 direction
-        else:
-            max_factor = 103e-11  # 100 direction
-        return max_factor
+    def resolved_crystal_orientation(self) -> CrystalOrientation:
+        """Return the configured crystal orientation, or the per-doping default."""
+        if self.crystal_orientation is None:
+            return default_orientation(self.doping_type)
+        return self.crystal_orientation
+
+    def pi_longitudinal(self) -> float:
+        """Signed low-doping longitudinal piezoresistance coefficient (1/Pa).
+
+        Smith (1954) / Kanda (1982) value at 300 K for the configured doping
+        type and crystal orientation. Sign included. Doping-dependent
+        reduction P(n) is applied separately via `piezoresistance_factor`.
+        """
+        pi_l, _ = pi_low_doping(self.doping_type, self.resolved_crystal_orientation())
+        return pi_l
+
+    def pi_transverse(self) -> float:
+        """Signed low-doping transverse piezoresistance coefficient (1/Pa)."""
+        _, pi_t = pi_low_doping(self.doping_type, self.resolved_crystal_orientation())
+        return pi_t
+
+    def max_piezoresistance_factor(self) -> float:
+        """Magnitude of the low-doping longitudinal piezoresistance coefficient (1/Pa).
+
+        Equals abs(pi_longitudinal()).
+        """
+        return abs(self.pi_longitudinal())
+
+    def dr_over_r(self, sigma_l: ArrayLike, sigma_t: ArrayLike) -> np.ndarray | float:
+        """Bending dR/R for an in-plane biaxial stress at the resistor surface.
+
+            dR/R = beta * (pi_l * sigma_l + pi_t * sigma_t)
+
+        where beta is the bending-weighted process efficiency factor and
+        pi_l, pi_t are the signed low-doping piezoresistance coefficients
+        for this doping type and crystal orientation.
+
+        The membrane (mid-plane) stress contribution is dropped. For thin
+        plates with shallow implants where |sigma_membrane| << |sigma_bending|
+        at the surface, this is accurate to within ~1%. If the membrane
+        component is a significant fraction of the surface stress -- e.g.
+        heavy intrinsic film stress combined with large-deflection NL
+        stretching -- include it explicitly via:
+
+            dR/R = beta1 * (pi_l * sigma_l_mid + pi_t * sigma_t_mid)
+                 + beta  * (pi_l * sigma_l_bending + pi_t * sigma_t_bending)
+
+        where sigma_*_bending = sigma_*_surface - sigma_*_mid. The
+        beta1/beta decomposition is exposed via `doping_process_metrics` on
+        `CantileverImplantation` and `PiezoresistorFromProfile`.
+
+        Args:
+            sigma_l: Longitudinal stress (Pa, along current direction). Scalar or array.
+            sigma_t: Transverse stress (Pa, perpendicular to current). Scalar or array.
+
+        Returns:
+            Dimensionless dR/R (multiply by 1e6 for ppm). Scalar if both
+            inputs are scalar; otherwise a numpy array of the broadcast shape.
+        """
+        beta = self.beta()
+        pi_l = self.pi_longitudinal()
+        pi_t = self.pi_transverse()
+        sigma_l_a = np.asarray(sigma_l, dtype=float)
+        sigma_t_a = np.asarray(sigma_t, dtype=float)
+        result = beta * (pi_l * sigma_l_a + pi_t * sigma_t_a)
+        if result.ndim == 0:
+            return float(result)
+        return result
+
+    def dr_over_r_from_tensor(
+        self,
+        sxx: ArrayLike,
+        syy: ArrayLike,
+        sxy: ArrayLike,
+        theta_rad: float,
+    ) -> np.ndarray | float:
+        """Bending dR/R for an in-plane stress tensor.
+
+        Rotates the tensor into the resistor's longitudinal/transverse frame
+        at angle `theta_rad` from the wafer x-axis, then calls `dr_over_r`.
+
+        Args:
+            sxx, syy, sxy: In-plane stress components (Pa). Scalars or arrays.
+            theta_rad: Angle from the wafer x-axis to the current direction.
+
+        Returns:
+            Dimensionless dR/R. Scalar or array per `dr_over_r`.
+        """
+        sigma_l, sigma_t = rotate_in_plane_stress(sxx, syy, sxy, theta_rad)
+        return self.dr_over_r(sigma_l, sigma_t)
 
     # Calculate the sensitivity factor (beta*)
     # Accounts for finite piezoresistor thickness
@@ -1182,51 +1272,41 @@ class Cantilever:
         betaStar = self.beta()
         Rs = self.sheet_resistance()
         wheatstone_bridge_sensitivity = self.v_bridge / 4
-        piMax = self.max_piezoresistance_factor()
+        pi_l = self.pi_longitudinal()
+        pi_t = self.pi_transverse()
         gamma = self.gamma()
         R = self.resistance()
         l_pr = self.l_pr()
         w_pr = self.w_pr()
 
-        # Pick the relative transverse PR coefficient for the doping type
-        transverse_factor = -1 if self.doping_type == "boron" else -0.5
-
         # Average length from the base to the piezoresistor centroid
         longitudinal_l_avg = self.l - l_pr / 2
         transverse_l_avg = self.l - l_pr
 
-        # Stress prefactor
-        stress_prefactor = 6 * piMax / (self.w * self.t**2) * betaStar * gamma
+        # Stress prefactor (signed pi coefficients, magnitude taken at the end)
+        stress_prefactor = 6 / (self.w * self.t**2) * betaStar * gamma
 
         # Calculate the longitudinal and transverse resistances
         # Assume that the transverse width is 2x the PR width
         R_longitudinal = 2 * Rs * l_pr / w_pr
         R_transverse = Rs * self.air_gap_width / (2 * w_pr)
 
-        # Calculate deltaR values
-        longitudinal_deltaR = stress_prefactor * longitudinal_l_avg * R_longitudinal
-        transverse_deltaR = stress_prefactor * transverse_factor * transverse_l_avg * R_transverse
+        # Calculate deltaR values; signs come from pi_l, pi_t
+        longitudinal_deltaR = stress_prefactor * pi_l * longitudinal_l_avg * R_longitudinal
+        transverse_deltaR = stress_prefactor * pi_t * transverse_l_avg * R_transverse
         deltaR_R = (longitudinal_deltaR + transverse_deltaR) / R
 
-        return deltaR_R * wheatstone_bridge_sensitivity
+        return abs(deltaR_R) * wheatstone_bridge_sensitivity
 
     # Calculate the input referred surface stress sensitivity
     # Units: V/Pa
     def surface_stress_sensitivity(self):
-        # Pick the relative transverse PR coefficient for the doping type
-        if self.doping_type == "boron":
-            longitudinal_factor = 1
-            transverse_factor = -1
-        else:
-            longitudinal_factor = 1
-            transverse_factor = -0.5
-
-        # The longitudinal and transverse stress is equal everywhere
-        sensitivity_factor = abs(longitudinal_factor + transverse_factor)
+        # The longitudinal and transverse stress is equal everywhere; the net
+        # response is |pi_l + pi_t|. For boron <110> these nearly cancel; for
+        # n-Si <100> the transverse term reduces the longitudinal response.
         return (
             9
-            * sensitivity_factor
-            * self.max_piezoresistance_factor()
+            * abs(self.pi_longitudinal() + self.pi_transverse())
             * self.beta()
             * self.gamma()
             * self.v_bridge

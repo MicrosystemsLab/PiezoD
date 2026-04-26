@@ -89,6 +89,61 @@ _DOPING_STATE_NAMES: tuple[str, ...] = (
     "implantation_dose",
 )
 
+# Boltzmann constant in eV/K, matching Cantilever.k_b_eV. Local copy avoids an
+# import cycle when this module is imported standalone.
+_K_B_EV: float = 8.617343e-5
+
+# Dopant diffusion parameters used by `diffusion_length_cm` (D0 in cm^2/s, Ea in eV).
+# From personal communications with L.K.J. Vandamme (Jan 2012). Most experimental
+# data is from boron resistors.
+_DIFFUSION_PARAMS: dict[str, dict[str, float]] = {
+    "arsenic": {"D0": 22.9, "Ea": 4.1},
+    "boron": {"D0": 0.76, "Ea": 3.46},
+    "phosphorus": {"D0": 3.85, "Ea": 3.66},
+}
+
+
+def diffusion_length_cm(doping_type: str, annealing_temp_K: float, annealing_time_s: float) -> float:
+    """Dopant diffusion length sqrt(D*t) in cm.
+
+    Args:
+        doping_type: One of 'boron', 'phosphorus', 'arsenic'.
+        annealing_temp_K: Annealing temperature in Kelvin.
+        annealing_time_s: Annealing time in seconds.
+
+    Returns:
+        Diffusion length in cm.
+
+    Raises:
+        ValueError: If doping_type is not recognized.
+    """
+    if doping_type not in _DIFFUSION_PARAMS:
+        raise ValueError(f"Unknown doping_type: {doping_type!r}. Must be 'boron', 'phosphorus', or 'arsenic'.")
+    params = _DIFFUSION_PARAMS[doping_type]
+    diffusivity = params["D0"] * np.exp(-params["Ea"] / _K_B_EV / annealing_temp_K)
+    return float(np.sqrt(diffusivity * annealing_time_s))
+
+
+def hooge_alpha_from_anneal(
+    doping_type: str,
+    annealing_temp_K: float,
+    annealing_time_s: float,
+) -> float:
+    """Hooge 1/f noise parameter from anneal conditions.
+
+    Empirical fit `2.469e-10 * sqrt(D*t)^-0.598` against the dopant diffusion
+    length (Vandamme, personal communication; data primarily from boron PRs).
+
+    Args:
+        doping_type: One of 'boron', 'phosphorus', 'arsenic'.
+        annealing_temp_K: Annealing temperature in Kelvin.
+        annealing_time_s: Annealing time in seconds.
+
+    Returns:
+        Hooge alpha (dimensionless).
+    """
+    return 2.469e-10 * diffusion_length_cm(doping_type, annealing_temp_K, annealing_time_s) ** -0.598
+
 
 @dataclass(frozen=True)
 class DopingProcessMetrics:
@@ -576,44 +631,12 @@ class CantileverImplantation(Cantilever):
 
     @property
     def diffusion_length(self) -> float:
-        """Calculate diffusion length from dopant diffusion.
-
-        Based on dopant diffusion length, not Si diffusion length.
-        From personal communications with L.K.J. Vandamme (Jan 2012).
-        Note that most experimental data is from boron resistors.
-
-        Returns:
-            Diffusion length (cm)
-
-        Raises:
-            ValueError: If doping_type is not recognized
-        """
-        diffusion_params = {
-            "arsenic": {"D0": 22.9, "Ea": 4.1},  # cm^2/s, eV
-            "boron": {"D0": 0.76, "Ea": 3.46},  # cm^2/s, eV
-            "phosphorus": {"D0": 3.85, "Ea": 3.66},  # cm^2/s, eV
-        }
-
-        if self.doping_type not in diffusion_params:
-            raise ValueError(f"Unknown doping type: {self.doping_type}. Must be 'arsenic', 'boron', or 'phosphorus'.")
-
-        params = diffusion_params[self.doping_type]
-        D0 = params["D0"]
-        Ea = params["Ea"]
-
-        diffusivity = D0 * np.exp(-Ea / self.k_b_eV / self.annealing_temp)
-
-        return np.sqrt(diffusivity * self.annealing_time)
+        """Dopant diffusion length sqrt(D*t) in cm."""
+        return diffusion_length_cm(self.doping_type, self.annealing_temp, self.annealing_time)
 
     def alpha(self) -> float:
-        """Calculate Hooge noise parameter from diffusion length.
-
-        Calculated from sqrt(Dt) using empirical data compiled for the book.
-
-        Returns:
-            Hooge noise parameter (dimensionless)
-        """
-        return 2.469e-10 * self.diffusion_length**-0.598
+        """Hooge 1/f noise parameter (dimensionless), from anneal conditions."""
+        return hooge_alpha_from_anneal(self.doping_type, self.annealing_temp, self.annealing_time)
 
     def doping_process_metrics(self, device_thickness_m: float | None = None) -> DopingProcessMetrics:
         """Return process-only doping metrics from the implantation lookup table.

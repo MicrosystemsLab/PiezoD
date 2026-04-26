@@ -213,7 +213,7 @@ class TestDiffusionLength:
         cantilever = CantileverImplantation(**cantilever_params)
         cantilever.doping_type = "invalid"
 
-        with pytest.raises(ValueError, match="Unknown doping type"):
+        with pytest.raises(ValueError, match="Unknown doping_type"):
             _ = cantilever.diffusion_length
 
 
