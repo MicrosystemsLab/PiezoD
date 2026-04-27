@@ -49,4 +49,4 @@ __all__ = [
     "rotate_in_plane_stress",
 ]
 
-__version__ = "0.10.3"
+__version__ = "0.11.0"
