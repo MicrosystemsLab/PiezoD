@@ -11,9 +11,9 @@ Two lookup table sources are supported:
 
 - "dopedealer": DopeDealer lookup table (ionImplantLookupTable_dopedealer.h5)
   - Dopants: B, P, As
-  - Anneal types: "inert" (1), "dry_o2" (2), "wet_o2" (3)
-  - Energy: 10-120 keV, Dose: 1e13-8e16 cm^-2
-  - Temperature: 850-1100C, Time: 15-120 min
+  - Anneal types: "inert" (1), "dry_o2" (2)
+  - Energy: 10-120 keV, Dose: 1e13-5e16 cm^-2
+  - Temperature: 900-1100C, Time: 15-150 min
 
 For all conditions, a 250A protection oxide layer is grown before the ion
 implantation.
@@ -49,7 +49,7 @@ _LOOKUP_TABLE_CACHE: dict[str, dict] = {}
 # Valid annealing types per lookup source
 _ANNEAL_TYPES: dict[str, dict[str, int]] = {
     "tsuprem4": {"inert": 1, "oxide": 2},
-    "dopedealer": {"inert": 1, "dry_o2": 2, "wet_o2": 3},
+    "dopedealer": {"inert": 1, "dry_o2": 2},
 }
 
 # Default optimization bounds per lookup source
@@ -66,13 +66,13 @@ _DEFAULT_BOUNDS: dict[str, dict[str, float]] = {
     },
     "dopedealer": {
         "min_annealing_time": 15 * 60,
-        "max_annealing_time": 120 * 60,
-        "min_annealing_temp": 273.15 + 850,
+        "max_annealing_time": 150 * 60,
+        "min_annealing_temp": 273.15 + 900,
         "max_annealing_temp": 273.15 + 1100,
         "min_implantation_energy": 10,
         "max_implantation_energy": 120,
         "min_implantation_dose": 1e13,
-        "max_implantation_dose": 8e16,
+        "max_implantation_dose": 5e16,
     },
 }
 
@@ -362,6 +362,83 @@ def _constraints_satisfied(
     return bool(np.all(residuals >= -tol))
 
 
+def _impute_nan_harmonic(arr: np.ndarray, max_iter: int = 500, tol: float = 1e-12) -> np.ndarray:
+    """Fill NaN cells with the harmonic (discrete-Laplace) extension of valid cells.
+
+    Iterates Gauss-Seidel "cell = mean of face neighbors" on NaN cells until
+    convergence, with valid cells acting as Dirichlet boundary conditions. In
+    1D this converges to exact linear interpolation between the bounding
+    valid cells; in higher dim it gives the curvature-minimizing fill with
+    C^0 continuity at hole boundaries (no kinks). `np.roll` provides
+    reflecting boundaries; this is acceptable as long as holes do not touch
+    array edges.
+
+    Args:
+        arr: Array containing NaN cells. Returned unchanged when no NaN.
+        max_iter: Maximum Gauss-Seidel iterations.
+        tol: Convergence tolerance on the maximum absolute update.
+
+    Returns:
+        Array with NaN cells filled. The input is not modified.
+
+    Raises:
+        ValueError: If the array is entirely NaN (no boundary data).
+    """
+    mask = np.isnan(arr)
+    if not mask.any():
+        return arr
+    if mask.all():
+        raise ValueError("Cannot inpaint: array is entirely NaN.")
+
+    out = arr.astype(np.float64, copy=True)
+    out[mask] = float(np.nanmean(arr))
+
+    ndim = out.ndim
+    for _ in range(max_iter):
+        s = np.zeros_like(out)
+        for ax in range(ndim):
+            s += np.roll(out, 1, axis=ax) + np.roll(out, -1, axis=ax)
+        s /= 2 * ndim
+        delta = np.where(mask, s - out, 0.0)
+        out = out + delta
+        if float(np.max(np.abs(delta))) < tol:
+            break
+    return out
+
+
+def _impute_lookup_holes(data: dict) -> None:
+    """Inpaint NaN cells in metric arrays per (dopant, ambient) sub-cube.
+
+    LUT generators occasionally fail at certain (dopant, dose, energy, temp,
+    ambient) combinations, leaving NaN scalars in the metric arrays. We fill
+    those holes with the harmonic extension of valid neighbors restricted to
+    the same dopant species and same anneal ambient -- never borrowing
+    physics across species or anneal types. Without this, downstream
+    `interpn(method="linear")` returns NaN whenever the enclosing hypercube
+    touches a hole, even via a 0-weight corner, because IEEE-754 arithmetic
+    gives `0 * NaN = NaN`. Modifies `data` in place.
+    """
+    metric_keys = ("Beta1", "Beta2", "Nz", "Nz_total", "Rs", "Xj")
+    n_dopants = len(data["ImplantDopants"])
+    ambient_key = "AnnealAmbient" if "AnnealAmbient" in data else "AnnealOxidation"
+    n_ambients = len(data[ambient_key])
+
+    for key in metric_keys:
+        if key not in data:
+            continue
+        arr = data[key]
+        if not np.issubdtype(arr.dtype, np.floating) or not np.isnan(arr).any():
+            continue
+        arr = arr.astype(np.float64, copy=True)
+        for dopant_idx in range(n_dopants):
+            for ambient_idx in range(n_ambients):
+                sub = arr[dopant_idx, ..., ambient_idx]
+                if not np.isnan(sub).any():
+                    continue
+                arr[dopant_idx, ..., ambient_idx] = _impute_nan_harmonic(sub)
+        data[key] = arr
+
+
 def _load_lookup_table(source: str) -> dict:
     """Load a bundled ion implantation lookup table.
 
@@ -391,6 +468,8 @@ def _load_lookup_table(source: str) -> dict:
 
     if source == "tsuprem4":
         data["n"] = np.maximum(data["n"].astype(np.float64) - _TSUPREM_BAKED_BACKGROUND_CM3, 0.0)
+
+    _impute_lookup_holes(data)
 
     _LOOKUP_TABLE_CACHE[source] = data
     return _LOOKUP_TABLE_CACHE[source]
@@ -446,7 +525,7 @@ class CantileverImplantation(Cantilever):
             annealing_time: Annealing time (seconds)
             annealing_temp: Annealing temperature (K)
             annealing_type: Annealing environment. For tsuprem4: 'inert' or
-                'oxide'. For dopedealer: 'inert', 'dry_o2', or 'wet_o2'.
+                'oxide'. For dopedealer: 'inert' or 'dry_o2'.
             implantation_energy: Ion implantation energy (keV)
             implantation_dose: Ion implantation dose (cm^-2)
             lookup_source: Lookup table source ('tsuprem4' or 'dopedealer')

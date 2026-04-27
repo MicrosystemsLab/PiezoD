@@ -1,18 +1,18 @@
 DopeDealer PiezoD Export Metadata
 =================================
-Git commit: 5f2fb3a0b483d9ed4de2f18124314d6be21b3989
-Git branch: --abbrev-ref HEAD
-Timestamp: 2026-04-26 16:51:17
+Git commit: 6b4eafd17d708b0f742414d38876884fe1c33fa1
+Git branch: main
+Timestamp: 2026-04-26 20:29:15
 Physics: FullPhysics, Solver: fbdf
 
 Grid specification:
-  Dopants: B, P, As
-  Doses (16): 1e13 to 8e16 (1-2-4-8 per decade)
-  Energies (7): 10, 15, 20, 30, 50, 80, 120 keV
-  Temperatures (5): 850, 900, 950, 1000, 1100 C
-  Times (8): 15, 30, 45, 60, 75, 90, 105, 120 min
-  Ambients (3): inert, dry_O2, wet_O2
-  Total cases: 1680
+  Dopants (3): B, P, As
+  Doses (12): 1e+13, 2e+13, 5e+13, 1e+14, 2e+14, 5e+14, 1e+15, 2e+15, 5e+15, 1e+16, 2e+16, 5e+16 cm^-2
+  Energies (6): 10, 20, 30, 50, 80, 120 keV
+  Temperatures (4): 900, 950, 1000, 1100 C
+  Times (7): 15, 30, 45, 60, 90, 120, 150 min
+  Ambients (2): inert, dry_O2
+  Total cases: 12096
 
 Dual Pearson table coverage (channeling tails):
   B:  15, 35, 80 keV; doses 1e13-8e15
@@ -22,6 +22,29 @@ Dual Pearson table coverage (channeling tails):
   Doses above 8e15 always use single Pearson.
 
 Results:
-  Completed: 1680/1680
-  Failures: 0
-  Total time: 36.2 min
+  Completed: 12075/12096
+  Failures: 21
+  Total time: 41.8 min
+
+Failed cases:
+  P 5e+15 20keV 1100C 15min inert
+  P 5e+15 20keV 1100C 30min inert
+  P 5e+15 20keV 1100C 45min inert
+  P 5e+15 20keV 1100C 60min inert
+  P 5e+15 20keV 1100C 90min inert
+  P 5e+15 20keV 1100C 120min inert
+  P 5e+15 20keV 1100C 150min inert
+  As 2e+16 30keV 950C 15min dry_O2
+  As 5e+16 50keV 1100C 15min dry_O2
+  As 2e+16 30keV 950C 30min dry_O2
+  As 5e+16 50keV 1100C 30min dry_O2
+  As 2e+16 30keV 950C 45min dry_O2
+  As 5e+16 50keV 1100C 45min dry_O2
+  As 2e+16 30keV 950C 60min dry_O2
+  As 5e+16 50keV 1100C 60min dry_O2
+  As 2e+16 30keV 950C 90min dry_O2
+  As 5e+16 50keV 1100C 90min dry_O2
+  As 2e+16 30keV 950C 120min dry_O2
+  As 5e+16 50keV 1100C 120min dry_O2
+  As 2e+16 30keV 950C 150min dry_O2
+  As 5e+16 50keV 1100C 150min dry_O2
