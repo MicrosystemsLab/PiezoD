@@ -84,3 +84,6 @@ lookupTableGeneration/simulations/*.str
 # Exception: bundled lookup tables for piezod package
 !python/src/piezod/data/ionImplantLookupTable_tsuprem.h5
 !python/src/piezod/data/ionImplantLookupTable_dopedealer.h5
+
+# Backup files (e.g. .bak.YYYYMMDD created by DopeDealer's /lut-release before overwrite)
+*.bak*

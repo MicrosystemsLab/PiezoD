@@ -1,0 +1,27 @@
+DopeDealer PiezoD Export Metadata
+=================================
+Git commit: 5f2fb3a0b483d9ed4de2f18124314d6be21b3989
+Git branch: --abbrev-ref HEAD
+Timestamp: 2026-04-26 16:51:17
+Physics: FullPhysics, Solver: fbdf
+
+Grid specification:
+  Dopants: B, P, As
+  Doses (16): 1e13 to 8e16 (1-2-4-8 per decade)
+  Energies (7): 10, 15, 20, 30, 50, 80, 120 keV
+  Temperatures (5): 850, 900, 950, 1000, 1100 C
+  Times (8): 15, 30, 45, 60, 75, 90, 105, 120 min
+  Ambients (3): inert, dry_O2, wet_O2
+  Total cases: 1680
+
+Dual Pearson table coverage (channeling tails):
+  B:  15, 35, 80 keV; doses 1e13-8e15
+  P:  15, 30, 50, 80, 120, 180 keV; doses 1e13-8e15
+  As: 0.5, 5, 10, 15, 50, 100, 180 keV; doses 1e13-8e15
+  Cases outside this coverage use single Pearson (no channeling tails).
+  Doses above 8e15 always use single Pearson.
+
+Results:
+  Completed: 1680/1680
+  Failures: 0
+  Total time: 36.2 min
