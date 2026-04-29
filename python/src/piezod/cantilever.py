@@ -610,55 +610,52 @@ class Cantilever:
         U_elastic, U_kinetic = self.calculateEnergies(omega_guess)
         return (U_elastic / U_kinetic - 1) ** 2
 
-    # Function for computing the elastic and kinetic energy of the beam
+    # Function for computing the elastic and kinetic energy of the beam.
+    # Used by Rayleigh-Ritz to find the resonant frequency of step,
+    # thermal, and piezoelectric cantilevers (which have a thicker base
+    # actuator/step that disrupts the simple Bernoulli result).
     def calculateEnergies(self, omega):
-        # Discretize the length of the cantilever
-        totalLength = self.l + self.l_a
-        dx = totalLength / (self.numXPoints - 1)
-        x = np.arange(0, totalLength + 1, dx)
-        base_indices = np.nonzero(x <= self.l_a)
-        tip_indices = np.nonzero(x > self.l_a)
+        n_points = self.numXPoints
+        total_length = self.l + self.l_a
+        dx = total_length / (n_points - 1)
+        x = np.linspace(0.0, total_length, n_points)
+        base_mask = x <= self.l_a
+        tip_mask = x > self.l_a
 
-        deflection = np.zeros((self.numXPoints, 1))
-        Udx_elastic = np.zeros((self.numXPoints, 1))
-        Udx_kinetic = np.zeros((self.numXPoints, 1))
-
-        # Define the multilayer mechanics
+        # Multilayer mechanics
         EI_base = 1 / self.calculateActuatorNormalizedCurvature()
         EI_tip = self.modulus() * self.w * self.t**3 / 12
 
-        # Empirical correction factors that give better agreement with FEA results
-        # Account for cases where t_a >> t, w_a >> w, l_a >> l
+        # Empirical correction factors for cases where t_a >> t, w_a >> w,
+        # l_a >> l. Match MATLAB.
         EI_base *= (self.t / self.t_a) ** 0.25
         EI_base *= (self.w / self.w_a) ** 0.1
         EI_base *= (self.l / self.l_a) ** 0.1
 
-        # Generate an approximate cantilever deflection profile assuming a
-        # point load force at the tip of the beam. Stitch together the two
-        # sections (the moment is constant despite the EI discontinuity)
-        tip_deflection = 1e-6  # Apply a test force
-        F = tip_deflection * 3 * EI_tip / self.l**3
-        moment = F * (totalLength - x)
-        deflection[base_indices] = -F * x[base_indices] ** 2 * (3 * totalLength - x[base_indices]) / (6 * EI_base)
+        # Approximate deflection profile from a tip point load, stitched
+        # at x = l_a where EI changes.
+        tip_deflection_test = 1e-6
+        F = tip_deflection_test * 3 * EI_tip / self.l**3
+        moment = F * (total_length - x)
 
-        # x-coordinate from the end of l_a
-        x_relative = x[tip_indices] - x[max(base_indices)]
+        deflection = np.zeros(n_points)
+        x_base = x[base_mask]
+        deflection[base_mask] = -F * x_base**2 * (3 * total_length - x_base) / (6 * EI_base)
 
-        # Continue with the slope that is at the end of the base section
-        if max(base_indices) > 1:
-            tip_slope = (deflection[max(base_indices)] - deflection[max(base_indices) - 1]) / dx
+        last_base_idx = int(np.where(base_mask)[0][-1])
+        x_relative = x[tip_mask] - x[last_base_idx]
+        if last_base_idx > 0:
+            tip_slope = (deflection[last_base_idx] - deflection[last_base_idx - 1]) / dx
         else:
-            tip_slope = 0
-
-        deflection[tip_indices] = (
-            deflection[max(base_indices)]
+            tip_slope = 0.0
+        deflection[tip_mask] = (
+            deflection[last_base_idx]
             - F * x_relative**2 * (3 * self.l - x_relative) / (6 * EI_tip)
             + tip_slope * x_relative
         )
 
-        E_metal, rho_metal, k_metal, alpha_metal = self.lookup_metal_properties()
+        _, rho_metal, _, _ = self.lookup_metal_properties()
         dm_tip = self.w * self.t * self.rho_si
-
         if self.cantilever_type in ("step", "thermal"):
             dm_base = self.w_a * (self.t * self.rho_si + self.t_oxide * self.rho_sio2 + self.t_a * rho_metal)
         else:
@@ -669,14 +666,17 @@ class Cantilever:
                 + rho_metal * (self.t_electrode_bottom + self.t_electrode_top)
             )
 
-        # Piecewise kinetic and elastic energies
-        Udx_elastic[base_indices] = 0.5 * moment[base_indices] ** 2 * dx / EI_base
-        Udx_kinetic[base_indices] = 0.5 * (omega * deflection[base_indices]) ** 2 * dx * dm_base
-        Udx_elastic[tip_indices] = 0.5 * moment[tip_indices] ** 2 * dx / EI_tip
-        Udx_kinetic[tip_indices] = 0.5 * (omega * deflection[tip_indices]) ** 2 * dx * dm_tip
+        Udx_elastic = np.zeros(n_points)
+        Udx_kinetic = np.zeros(n_points)
+        Udx_elastic[base_mask] = 0.5 * moment[base_mask] ** 2 * dx / EI_base
+        Udx_kinetic[base_mask] = 0.5 * (omega * deflection[base_mask]) ** 2 * dx * dm_base
+        Udx_elastic[tip_mask] = 0.5 * moment[tip_mask] ** 2 * dx / EI_tip
+        Udx_kinetic[tip_mask] = 0.5 * (omega * deflection[tip_mask]) ** 2 * dx * dm_tip
 
-        U_elastic = np.trapezoid(x, Udx_elastic)
-        U_kinetic = np.trapezoid(x, Udx_kinetic)
+        # ``np.trapezoid(y, x)`` is the correct argument order; the original
+        # port had it reversed.
+        U_elastic = float(np.trapezoid(Udx_elastic, x))
+        U_kinetic = float(np.trapezoid(Udx_kinetic, x))
         return U_elastic, U_kinetic
 
     # Methods
@@ -719,6 +719,10 @@ class Cantilever:
         self.t_electrode_bottom = 50e-9
         self.t_electrode_top = 50e-9
         self.t_a_seed = 20e-9
+        # Actuator drive voltage. Zero by default so unactuated devices
+        # work without setup; user sets non-zero for thermal/piezoelectric
+        # cantilevers when configuring the actuator.
+        self.v_actuator = 0.0
 
         # Use simple thermal models by default
         self.T = 273.15 + 23
@@ -758,9 +762,7 @@ class Cantilever:
         omega_damped_hz, Q = self.omega_damped_hz_and_Q()
         x, active_doping, total_doping = self.doping_profile()
         TMax_approx, TTip_approx = self.approxTempRise()
-        # NOTE: the FD temperature solver (calculateMaxAndTipTemp /
-        # calculateTempProfile) has unported MATLAB-isms that raise on the
-        # default cantilever_type. Skip the F-D line until that is ported.
+        TMax, TTip = self.calculateMaxAndTipTemp()
         thermoLimit = self.thermo_integrated() / self.force_sensitivity()
 
         print("=======================")
@@ -790,6 +792,7 @@ class Cantilever:
         print(f"Sheet Resistance: {self.sheet_resistance()}")
         print(f"Power dissipation (mW): {self.power_dissipation() * 1e3:g}")
         print(f"Approx. Temp Rises (C) - Tip: {TTip_approx}  Max: {TMax_approx}")
+        print(f"F-D Temp Rises (C)     - Tip: {TTip}  Max: {TMax}")
 
         print(f"Integrated noise (V): {self.integrated_noise():g}")
         print(f"Integrated johnson noise (V): {self.johnson_integrated():g}")
@@ -937,19 +940,21 @@ class Cantilever:
     ## Calculate Rsheet(x) assuming temperature dependent cantilever properties (ohm/sq)
     def RSheetProfile(self, x, T_x):
         z, active_doping, total_doping = self.doping_profile()  # Units: z -> m, doping -> N/cm^3
-        # Net active carriers drive resistor conductivity; integrand is zero
-        # below the junction so the profile naturally truncates there.
-        n_z_x = np.transpose(active_doping) * np.ones((1, self.numXPoints))
+        # Build numZPoints x numXPoints matrices. The MATLAB transpose
+        # trick is a no-op on a 1-D NumPy array, so we explicitly add the
+        # column axis before broadcasting.
+        n_z_x = active_doping.reshape(-1, 1) * np.ones((1, self.numXPoints))
 
-        # Generate a numZPoints x numXPoints matrix
-        if len(T_x) == 1:
-            T_z_x = np.dot(np.ones((self.numZPoints, 1)), np.transpose(T_x) * np.ones((1, self.numXPoints)))
+        T_arr = np.atleast_1d(np.asarray(T_x, dtype=float))
+        if T_arr.size == 1:
+            T_z_x = float(T_arr.flat[0]) * np.ones((self.numZPoints, self.numXPoints))
         else:
-            T_z_x = np.dot(np.ones((self.numZPoints, 1)), np.transpose(T_x))
+            T_z_x = np.ones((self.numZPoints, 1)) * T_arr.reshape(1, -1)
 
-        # TODO
         mu_z_x, sigma_z_x = self.mobility(n_z_x, T_z_x + self.T)
-        Rsheet_x = 1 / np.trapezoid(z * 1e2, sigma_z_x)  # Convert z from m to cm
+        # Integrate sigma over depth (z in cm). axis=0 because z is the
+        # first axis of the (numZPoints, numXPoints) matrix.
+        Rsheet_x = 1.0 / np.trapezoid(sigma_z_x, z * 1e2, axis=0)
         return Rsheet_x
 
     # The number of current carriers in the piezoresistor (-)
@@ -1363,32 +1368,38 @@ class Cantilever:
     # Calculate the exact average PR temperature (K)
     def averagePRTemp(self):
         if self.temperature_dependent_properties == "yes":
-            x, Q, temp = self.calculateTempProfileTempDependent()
+            x, _, temp = self.calculateTempProfileTempDependent()
         else:
-            x, Q, temp = self.calculateTempProfile()
+            x, _, temp = self.calculateTempProfile()
 
-        pr_indices = np.intersect1d(np.nonzero(x >= self.l_a), np.nonzero(x <= (self.l_a + self.l_pr())))
-        return self.T + np.mean(temp(pr_indices))
+        pr_indices = np.intersect1d(
+            np.where(x >= self.l_a)[0],
+            np.where(x <= (self.l_a + self.l_pr()))[0],
+        )
+        return self.T + float(np.mean(temp[pr_indices]))
 
     # Calculate the temperature at the base of the PR (K)
-    # Useful for the designing combined sensors/actuators
+    # Useful for designing combined sensors/actuators
     def tempRiseAtPRBase(self):
-        [x, Q, temp] = self.calculateTempProfile()
-        base_index = np.nonzero(x >= self.l_a)[0][0]
-        return temp(base_index)
+        x, _, temp = self.calculateTempProfile()
+        base_index = np.where(x >= self.l_a)[0][0]
+        return float(temp[base_index])
 
     # Calculate the maximum piezoresistor temperature (K)
     def maxPRTemp(self):
-        [x, Q, temp] = self.calculateTempProfile()
-        pr_indices = np.intersect1d(np.nonzero(x >= self.l_a), np.nonzero(x <= (self.l_a + self.l_pr())))
-        return max(temp(pr_indices))
+        x, _, temp = self.calculateTempProfile()
+        pr_indices = np.intersect1d(
+            np.where(x >= self.l_a)[0],
+            np.where(x <= (self.l_a + self.l_pr()))[0],
+        )
+        return float(np.max(temp[pr_indices]))
 
-    # Calculate the average temperature increase of the actuator (K)
-    # Use for calculating A_XK (nm/K) for the thermal actuators
+    # Calculate the average temperature increase of the actuator (K).
+    # Used for calculating A_XK (nm/K) for thermal actuators.
     def averageActuatorDeltaTemp(self):
-        [x, Q, temp] = self.calculateTempProfile()
-        actuator_indices = x <= (self.l_a)
-        return np.mean(temp(actuator_indices))
+        x, _, temp = self.calculateTempProfile()
+        actuator_mask = x <= self.l_a
+        return float(np.mean(temp[actuator_mask]))
 
     # Calculate the temp change of the PR in response to thermal actuation (K)
     def thermalCrosstalk(self):
@@ -1530,69 +1541,81 @@ class Cantilever:
             )
         return l_healing_cantilever, l_healing_step
 
-    # Model the temp profile from Joule heating via finite differences
+    # Model the temp profile from Joule heating via finite differences.
     # Assumes convection to ambient, adiabatic tip, and R_base to the
-    # silicon die which is clamped at the ambient temperature
+    # silicon die which is clamped at the ambient temperature.
+    #
+    # Calling conventions:
+    #   no args:   temperature-independent solution
+    #   one arg:   custom k_x along the cantilever
+    #   two args:  custom k_x and Rsheet_x along the cantilever
+    #
+    # All internal arrays are 1-D (shape ``(n_points,)``). The MATLAB
+    # original used column vectors but Python is cleaner with flat arrays;
+    # this is the source of most of the bugs the original port had.
     def calculateTempProfile(self, *arg):
-        # There are several ways to call calculateTempProfile()
-        # No arguments: temperature independent solution
-        # One argument (legacy): temp-dependent thermal conductivity
-        # Two arguments: temp-dependent sheet resistance and conductivity
-        if len(arg) == 1:
-            k_x = arg[0]
-            Rsheet = self.sheet_resistance()
-            Rsheet_x = np.ones((1, self.numXPoints)) * Rsheet
-        elif len(arg) == 2:
-            k_x = arg[0]
-            Rsheet_x = arg[1]
-        else:
-            k_c = self.k_base()
-            Rsheet = self.sheet_resistance()
-            k_x = np.ones((1, self.numXPoints)) * k_c
-            Rsheet_x = np.ones((1, self.numXPoints)) * Rsheet
-
-        # Discretize the length of the cantilever
         n_points = self.numXPoints
-        totalLength = self.l + self.l_a
-        dx = totalLength / (n_points - 1)
-        x = np.arange(0, totalLength + 1, dx)
 
-        # Determine the step and PR indices
-        step_indices = np.nonzero(x <= self.l_a)
-        actuator_indices = np.nonzero(x <= (self.l_a - self.l_a_gap))
-        cantilever_indices = np.nonzero(x > self.l_a)
-        pr_indices = np.intersect1d(cantilever_indices, np.nonzero(x < (self.l_a + self.l_pr())))
-
-        # Calculate Qgen_x differently depending on our temperature range
-        if self.temperature_dependent_properties == "yes":
-            # Calculate Qgen(x) considering temperature dependent sheet resistance
-            # This method does not converge quickly for design optimization,
-            # so is best used for modeling
-            index_range = np.nonzero(x <= self.l_pr())
-            R_x = 2 * Rsheet_x[index_range] / self.w_pr()
-            R_calc = 2 * np.trapezoid(x[index_range], Rsheet_x(index_range) / self.w_pr())
-            I_calc = (self.v_bridge / 2) / R_calc
-            Qgen_x = I_calc**2 * R_x
+        if len(arg) == 1:
+            k_x = np.asarray(arg[0], dtype=float).reshape(-1)
+            Rsheet_x = np.full(n_points, self.sheet_resistance())
+        elif len(arg) == 2:
+            k_x = np.asarray(arg[0], dtype=float).reshape(-1)
+            Rsheet_x = np.asarray(arg[1], dtype=float).reshape(-1)
         else:
-            # Assume power/length is constant along the piezoresistor length
-            # This method works well for modeling near the ambient
-            # temperature and for design optimization
-            # Note: calculate Qgen_x based upon the actual lengths
-            # to avoid discretization errors (line 2 here is very important)
-            power = (self.v_bridge / 2) ** 2 / self.resistance()
-            Qgen_x = power / (x[pr_indices[-1]] - x[pr_indices[1]]) * np.ones((x.size, 1))
+            k_x = np.full(n_points, self.k_base())
+            Rsheet_x = np.full(n_points, self.sheet_resistance())
 
-        # Setup other variables
+        if k_x.size != n_points:
+            raise ValueError(f"k_x must have {n_points} entries, got {k_x.size}.")
+        if Rsheet_x.size != n_points:
+            raise ValueError(f"Rsheet_x must have {n_points} entries, got {Rsheet_x.size}.")
+
+        # Discretize the length of the cantilever.
+        total_length = self.l + self.l_a
+        dx = total_length / (n_points - 1)
+        x = np.linspace(0.0, total_length, n_points)
+
+        # Index masks for the actuator step, the actuator beam, the cantilever
+        # body, and the piezoresistor. Each is a 1-D index array.
+        step_indices = np.where(x <= self.l_a)[0]
+        actuator_indices = np.where(x <= (self.l_a - self.l_a_gap))[0]
+        cantilever_indices = np.where(x > self.l_a)[0]
+        pr_indices = np.intersect1d(
+            cantilever_indices,
+            np.where(x < (self.l_a + self.l_pr()))[0],
+        )
+
+        # Joule heating density along the cantilever (W/m).
+        if self.temperature_dependent_properties == "yes":
+            # Considers a temperature-dependent sheet resistance. Slow to
+            # converge for design optimization, so reserved for modeling.
+            index_range = np.where(x <= self.l_pr())[0]
+            R_x = 2 * Rsheet_x[index_range] / self.w_pr()
+            R_calc = 2 * np.trapezoid(Rsheet_x[index_range] / self.w_pr(), x[index_range])
+            I_calc = (self.v_bridge / 2) / R_calc
+            Qgen_x = np.zeros(n_points)
+            Qgen_x[index_range] = I_calc**2 * R_x
+        else:
+            # Constant power per unit length over the piezoresistor span.
+            power = (self.v_bridge / 2) ** 2 / self.resistance()
+            pr_span = x[pr_indices[-1]] - x[pr_indices[0]] if pr_indices.size else 1.0
+            Qgen_x = np.full(n_points, power / pr_span)
+
         tempAmbient = self.T
         h = self.lookupHeff()
-        E_metal, rho_metal, k_metal, alpha_metal = self.lookup_metal_properties()
-        K = self.w * np.transpose(k_x) * self.t * np.ones(((n_points, 1)))
-        perimeter = 2 * (self.w + self.t) * np.ones((n_points, 1))
-        Q = np.zeros((n_points, 1))
+        _, _, k_metal, _ = self.lookup_metal_properties()
+
+        # K(x) = area * k_c, perimeter(x) = perimeter for the convection term.
+        K = self.w * k_x * self.t * np.ones(n_points)
+        perimeter = np.full(n_points, 2 * (self.w + self.t))
+        Q = np.zeros(n_points)
         Q[pr_indices] = Qgen_x[pr_indices]
 
-        # Build K (area*k_c) and P
-        if self.cantilever_type == "step":
+        # Cantilever-type-specific overrides for the actuator step region.
+        if self.cantilever_type == "none":
+            pass
+        elif self.cantilever_type == "step":
             K[step_indices] = self.w_a * (k_x[step_indices] * self.t + k_metal * self.t_a)
             perimeter[step_indices] = 2 * (self.w_a + self.t_a)
         elif self.cantilever_type == "thermal":
@@ -1608,27 +1631,31 @@ class Cantilever:
                 + k_metal * (self.t_electrode_top + self.t_electrode_bottom)
             )
             perimeter[step_indices] = 2 * (self.w_a + self.t_a)
+        else:
+            raise RuntimeError(f"Unknown cantilever_type: {self.cantilever_type!r}")
 
-        # Build A and RHS matrices
+        # Build the tridiagonal FD operator. Interior nodes use the standard
+        # 3-point stencil; the base (row 0) carries the R_base resistance to
+        # the die; the tip (row n_points - 1) is adiabatic.
         A = np.zeros((n_points, n_points))
-        rhs = np.zeros((n_points, 1))
-        for ii in range(2, n_points):
+        rhs = np.zeros(n_points)
+        for ii in range(1, n_points - 1):
             A[ii, ii - 1] = -K[ii - 1] / dx**2
             A[ii, ii] = (K[ii - 1] + K[ii + 1]) / dx**2 + h * perimeter[ii]
             A[ii, ii + 1] = -K[ii + 1] / dx**2
-            rhs[ii, 1] = Q[ii] + h * perimeter[ii] * tempAmbient
+            rhs[ii] = Q[ii] + h * perimeter[ii] * tempAmbient
 
-        A[n_points, n_points - 1 : n_points] = [1 - 1]  # Adiabatic at tip
-        # TODO A = sparse(A) # Leads to a significant speed improvement
+        # Adiabatic tip: T[n-1] - T[n-2] = 0.
+        A[n_points - 1, n_points - 2] = 1.0
+        A[n_points - 1, n_points - 1] = -1.0
 
-        # Properly handle R_base
-        A[0, 0] = -1 - self.R_base * K[0] / dx
+        # R_base boundary at the cantilever base.
+        A[0, 0] = -1.0 - self.R_base * K[0] / dx
         A[0, 1] = self.R_base * K[0] / dx
+        rhs[0] = -self.T
 
-        rhs[0, 0] = -self.T
         T_absolute = np.linalg.solve(A, rhs)
         T_increase = T_absolute - tempAmbient
-
         return x, Q, T_increase
 
     # Model the temperature profile of a tip-heated cantilever
@@ -1728,7 +1755,10 @@ class Cantilever:
 
             # Calculate k_si and Rsheet from the current temperature guess
             x, z, k_z_x = self.thermal_conductivity_profile(absoluteTemp)
-            k_x = np.mean(k_z_x, 1)  # Average k for a cross-section
+            # k_z_x is (numZPoints, numXPoints); average over depth (axis 0)
+            # to get a per-x effective conductivity. MATLAB's mean(., 1)
+            # collapsed dim 1 (rows) which corresponds to numpy axis 0.
+            k_x = np.mean(k_z_x, axis=0)
             Rsheet_x = self.RSheetProfile(x, T_current)
             pr_indices = np.nonzero(x <= self.l_pr())
 
@@ -1835,12 +1865,16 @@ class Cantilever:
         z, active_doping, total_doping = self.doping_profile()
         x = np.linspace(0, self.l, self.numXPoints)
 
-        # let dim(T) and dim(total_doping) be numZPoints x numXPoints
-        n_matrix = 1e6 * np.transpose(total_doping) * np.ones((1, self.numXPoints))  # convert from 1/cc to 1/m^3
-        if T.size == 1:
-            T_matrix = np.ones((self.numZPoints, 1)) * np.transpose(T) * np.ones((1, self.numXPoints))
+        # Reshape into ``(numZPoints, numXPoints)`` matrices. The MATLAB
+        # transpose trick (``total_doping' * ones(1, numXPoints)``) does
+        # nothing on a 1-D NumPy array, so we explicitly add a column axis
+        # before broadcasting.
+        n_matrix = 1e6 * total_doping.reshape(-1, 1) * np.ones((1, self.numXPoints))
+        T_arr = np.atleast_1d(np.asarray(T, dtype=float))
+        if T_arr.size == 1:
+            T_matrix = float(T_arr.flat[0]) * np.ones((self.numZPoints, self.numXPoints))
         else:
-            T_matrix = np.ones((self.numZPoints, 1)) * np.transpose(T)
+            T_matrix = np.ones((self.numZPoints, 1)) * T_arr.reshape(1, -1)
 
         # Calculate thermal conductivity
         lambda_TU = C_TU * (theta_2**2 - theta_1**2) / (2 * nu_TU * c_TU * beta_TU * T_matrix)
@@ -1910,7 +1944,10 @@ class Cantilever:
     # Calculate the thickness of silicon required to have the same EI
     # as the actuator/step at the base
     def calculateEquivalentThickness(self):
-        t_equivalent = optimize.fminbound(self.findEIResidual, self.t / 100, self.t * 100, "xtol", 1e-12)
+        # ``fminbound(func, x1, x2, args=(), xtol=...)``; the original port
+        # passed ``"xtol"`` as the 4th positional, which is ``args``, so
+        # findEIResidual was called with extra arguments. Use the keyword.
+        t_equivalent = optimize.fminbound(self.findEIResidual, self.t / 100, self.t * 100, xtol=1e-12)
         return t_equivalent
 
     def actuatorNeutralAxis(self):
@@ -1918,139 +1955,184 @@ class Cantilever:
         return sum(z * E * A) / sum(E * A)
 
     def d31(self):
+        # MATLAB used ``interp1(d31_t, d31_aln, t_a, 'spline')`` which both
+        # builds the interpolant and evaluates at ``t_a`` in one call. The
+        # Python port mistakenly passed ``t_a`` as the ``kind`` argument
+        # to ``scipy.interpolate.interp1d``. Use a CubicSpline (spline
+        # interpolation, matching MATLAB's 'spline' option) and evaluate
+        # at the actuator thickness.
         if self.d31_manual == 0:
-            d31 = interpolate.interp1d(self.d31_t, self.d31_aln, self.t_a, "spline")
-        else:
-            d31 = self.d31_manual
-        return d31
+            spline = interpolate.CubicSpline(self.d31_t, self.d31_aln)
+            return float(spline(self.t_a))
+        return float(self.d31_manual)
 
     def calculateDeflection(self):
         n_points = self.numXPoints
-        totalLength = self.l + self.l_a
-        dx = totalLength / (n_points - 1)
-        x = np.arange(0, totalLength + 1, dx)
+        total_length = self.l + self.l_a
+        x = np.linspace(0.0, total_length, n_points)
 
-        M = 0  # external moment is zero
-        P = 0  # external load is zero
+        M = 0.0  # external moment is zero
+        P = 0.0  # external load is zero
 
         z, E, A, I = self.lookupActuatorMechanics()
         stress = self.calculateActuatorStress()
 
-        # Calculate the curvature and neutral axis
-        # The curvature may vary as a function of position (e.g. thermal)
-        # so calculate the deflection by integrating the curvature twice
-        C = np.zeros((x.size, 1))
+        # Curvature C(x) integrates the layer-by-layer bending mechanics at
+        # each x. MATLAB used a 1-indexed loop and a column vector; Python
+        # uses a 1-D array indexed 0..n_points-1.
+        C = np.zeros(n_points)
+        denom = np.sum(E * A) * np.sum(E * (I + A * z**2)) - np.sum(z * E * A) ** 2
+        for ii in range(n_points):
+            C[ii] = (
+                -(
+                    (M - np.sum(z * A * stress[ii, :])) * np.sum(E * A)
+                    + (P + np.sum(A * stress[ii, :])) * np.sum(E * z * A)
+                )
+                / denom
+            )
 
-        # Calculate the curvature, C along the cantilever length
-        for ii in range(1, x.size + 1):
-            C[ii] = -(
-                (M - np.sum(z * A * stress[ii, :])) * np.sum(E * A) + (P + sum(A * stress[ii, :])) * np.sum(E * z * A)
-            ) / (np.sum(E * A) * np.sum(E * (I + A * z**2)) - np.sum(z * E * A) ** 2)
+        # No curvature beyond the end of the actuator (dopant bending is
+        # not included in this calculation).
+        C[x > self.l_a] = 0.0
 
-        # No curvature beyond the end of the actuator
-        # i.e. no dopant bending included in this calculation
-        C[x > self.l_a] = 0
-
-        # Calculate the deflection from the curvature by integrating
         theta = integrate.cumulative_trapezoid(C, x, initial=0)
         deflection = integrate.cumulative_trapezoid(np.tan(theta), x, initial=0)
         return x, deflection
 
-    # Calculate the stress as a function along the actuator length
+    # Calculate the stress as a function of x, per actuator layer.
+    # Returns a (numXPoints, n_layers) array. For ``cantilever_type='none'``
+    # there is no actuator and the stress is zero everywhere.
     def calculateActuatorStress(self):
+        if self.cantilever_type == "none":
+            # Match the 3-layer convention of step/thermal so callers that
+            # mix this in with ``film_intrinsic_stress`` see consistent shapes.
+            return np.zeros((self.numXPoints, 3))
+
         z, E, A, I = self.lookupActuatorMechanics()
-        E_metal, rho_metal, k_metal, alpha_metal = self.lookup_metal_properties()
-        x_temp, Q, temp = self.calculateTempProfile()
+        _, _, _, alpha_metal = self.lookup_metal_properties()
+        x_temp, _, temp = self.calculateTempProfile()
         temp = temp + self.T  # Use absolute temperature for these calculations
 
+        # ``film_intrinsic_stress`` returns shape ``(n_layers,)``; broadcast
+        # against ``(numXPoints, 1)`` to make it constant along x.
         intrinsic_stress = np.ones((self.numXPoints, 1)) * self.film_intrinsic_stress()
         intrinsic_stress[x_temp > self.l_a, :] = 0
 
-        if self.cantilever_type == "step" or self.cantilever_type == "thermal":
-            cte = np.array((self.alpha_si, self.alpha_sio2, alpha_metal))
-            thermal_stress = (temp - self.T_ref) * np.ones((self.numXPoints, 1)) * (cte * E)
-            thermal_stress[x_temp > self.l_a, 2:3] = 0
+        if self.cantilever_type in ("step", "thermal"):
+            cte = np.array([self.alpha_si, self.alpha_sio2, alpha_metal])
+            # (numXPoints,) -> (numXPoints, 1) so multiplying by (n_layers,)
+            # gives (numXPoints, n_layers).
+            thermal_stress = (temp - self.T_ref)[:, None] * (cte * E)
+            thermal_stress[x_temp > self.l_a, 1:3] = 0
             piezoelectric_stress = np.zeros((self.numXPoints, 3))
         elif self.cantilever_type == "piezoelectric":
-            cte = np.array((self.alpha_si, self.alpha_sio2, self.alpha_aln, alpha_metal, self.alpha_aln, alpha_metal))
-            thermal_stress = (temp - self.T_ref) * np.ones((self.numXPoints, 1)) * (cte * E)
-            thermal_stress[x_temp > self.l_a, 2:6] = 0
+            cte = np.array([self.alpha_si, self.alpha_sio2, self.alpha_aln, alpha_metal, self.alpha_aln, alpha_metal])
+            thermal_stress = (temp - self.T_ref)[:, None] * (cte * E)
+            thermal_stress[x_temp > self.l_a, 1:6] = 0
 
-            # Calculate the piezoelectric stress
-            # The seed electric field will vary depending on
-            E_field = np.array((0, 0, 0, 0, self.v_actuator / self.t_a, 0))
-            d31 = np.array((0, 0, 0, 0, self.d31(), 0)).transpose()
-
-            piezoelectric_stress = np.ones((self.numXPoints, 1)) * E * d31 * E_field
+            # Piezoelectric stress is sigma = E_layer * d31 * E_field. The
+            # seed electric field is applied across the AlN actuator layer
+            # only, so d31 and E_field are non-zero only at index 4.
+            E_field = np.array([0.0, 0.0, 0.0, 0.0, self.v_actuator / self.t_a, 0.0])
+            d31_vec = np.array([0.0, 0.0, 0.0, 0.0, self.d31(), 0.0])
+            piezoelectric_stress = np.ones((self.numXPoints, 1)) * (E * d31_vec * E_field)
             piezoelectric_stress[x_temp > self.l_a - self.l_a_gap, :] = 0
         else:
-            raise RuntimeError("Unknown cantilever_type")
+            raise RuntimeError(f"Unknown cantilever_type: {self.cantilever_type!r}")
 
-        # Scale the stress by the active width of the device
-        return intrinsic_stress + thermal_stress + self.w_a_active / self.w_a * piezoelectric_stress
+        return intrinsic_stress + thermal_stress + (self.w_a_active / self.w_a) * piezoelectric_stress
 
     def tip_deflection_distribution(self):
+        """Mean and standard deviation of tip deflection across random film stresses.
+
+        Mirrors MATLAB ``tip_deflection_distribution``: turns the actuator
+        off, samples the deflection profile under randomized intrinsic
+        film stress over ``numRandomStressIterations`` trials, and
+        returns ``(mean, std)`` of the tip deflection.
+        """
+        n_iter = Cantilever.numRandomStressIterations
         v_actuator_temporary = self.v_actuator
         self.v_actuator = 0
         self.film_stress = "random"
-        z = np.zeros((Cantilever.numRandomStressIterations, 1))
-        z_tip = np.zeros((Cantilever.numRandomStressIterations, 1))
-
-        for ii in range(Cantilever.numRandomStressIterations):
-            _, z_ii = self.calculateDeflection()
-            z[:, ii] = z_ii
-            z_tip[ii] = self.tipDeflection()
-
-        self.v_actuator = v_actuator_temporary
-        self.film_stress = "nominal"
-
-        mu_z = np.mean(z_tip)
-        sigma_z = np.std(z_tip)
-        return mu_z, sigma_z
+        try:
+            z_tip = np.zeros(n_iter)
+            for ii in range(n_iter):
+                z_tip[ii] = self.tipDeflection()
+        finally:
+            self.v_actuator = v_actuator_temporary
+            self.film_stress = "nominal"
+        return float(np.mean(z_tip)), float(np.std(z_tip))
 
     def plot_tip_deflection_distribution(self):
+        n_iter = Cantilever.numRandomStressIterations
         v_actuator_temporary = self.v_actuator
         self.v_actuator = 0
         self.film_stress = "random"
-        z = np.zeros((Cantilever.numRandomStressIterations, 1))
 
-        for ii in range(Cantilever.numRandomStressIterations):
-            x_vals, z_ii = self.calculateDeflection()
-            z[:, ii] = z_ii
-        self.v_actuator = v_actuator_temporary
-        self.film_stress = "nominal"
+        # Pre-size buffers from a first deflection call so the type
+        # checker knows the shapes upfront.
+        x_first, z_first = self.calculateDeflection()
+        z = np.zeros((x_first.size, n_iter))
+        z[:, 0] = z_first
+        try:
+            for ii in range(1, n_iter):
+                _, z_ii = self.calculateDeflection()
+                z[:, ii] = z_ii
+        finally:
+            self.v_actuator = v_actuator_temporary
+            self.film_stress = "nominal"
 
         plt.figure()
-        plt.plot(x_vals * 1e6, z * 1e6)
+        plt.plot(x_first * 1e6, z * 1e6)
         plt.xlabel(r"Distance from base ($\mu$m)")
         plt.ylabel(r"Deflection ($\mu$m)")
         plt.box(False)
 
     def film_intrinsic_stress(self):
-        # film_stress = 'nominal' => use average stress
-        # film_stress = 'random' => use random, normally distributed value (sigma = 1/4 so that user input = 2 sigma)
-        sigma = 0
+        """Per-layer intrinsic film stress (Pa).
+
+        Returns a 1-D array sized to the active actuator layer stack:
+        3 entries for ``step``/``thermal`` (Si / SiO2 / metal),
+        6 entries for ``piezoelectric``
+        (Si / SiO2 / AlN seed / electrode / AlN / electrode),
+        and a 3-entry zero vector for ``none``.
+
+        ``film_stress = 'random'`` perturbs each layer normally with the
+        user-supplied 2-sigma range; ``'nominal'`` uses the mean.
+        """
+        sigma = 0.0
         if self.film_stress == "random":
             sigma = 1 / 4
 
-        if self.cantilever_type == "step" or self.cantilever_type == "thermal":
-            sigma_i = np.zeros((3, 1))
-            sigma_i[0] = np.mean(self.sigma_si_range) + sigma * np.random.randn() * np.diff(self.sigma_si_range)
-            sigma_i[1] = np.mean(self.sigma_sio2_range) + sigma * np.random.randn() * np.diff(self.sigma_sio2_range)
-            sigma_i[2] = np.mean(self.sigma_al_range) + sigma * np.random.randn() * np.diff(self.sigma_al_range)
-        elif self.cantilever_type == "piezoelectric":
-            sigma_i = np.zeros((5, 1))
-            sigma_i[0] = np.mean(self.sigma_si_range) + sigma * np.random.randn() * np.diff(self.sigma_si_range)
-            sigma_i[1] = np.mean(self.sigma_sio2_range) + sigma * np.random.randn() * np.diff(self.sigma_sio2_range)
-            sigma_i[2] = np.mean(self.sigma_aln_range) + sigma * np.random.randn() * np.diff(self.sigma_aln_range)
-            sigma_i[4] = np.mean(self.sigma_aln_range) + sigma * np.random.randn() * np.diff(self.sigma_aln_range)
+        if self.cantilever_type == "none":
+            return np.zeros(3)
+
+        def perturbed(rng_lo_hi):
+            lo, hi = float(rng_lo_hi[0]), float(rng_lo_hi[1])
+            return 0.5 * (lo + hi) + sigma * float(np.random.randn()) * (hi - lo)
+
+        if self.cantilever_type in ("step", "thermal"):
+            return np.array(
+                [
+                    perturbed(self.sigma_si_range),
+                    perturbed(self.sigma_sio2_range),
+                    perturbed(self.sigma_al_range),
+                ]
+            )
+        if self.cantilever_type == "piezoelectric":
+            sigma_i = np.zeros(6)
+            sigma_i[0] = perturbed(self.sigma_si_range)
+            sigma_i[1] = perturbed(self.sigma_sio2_range)
+            sigma_i[2] = perturbed(self.sigma_aln_range)
+            sigma_i[4] = perturbed(self.sigma_aln_range)
             if self.metal_type == "titanium":
-                sigma_i[3] = np.mean(self.sigma_ti_range) + sigma * np.random.randn() * np.diff(self.sigma_ti_range)
-                sigma_i[5] = np.mean(self.sigma_ti_range) + sigma * np.random.randn() * np.diff(self.sigma_ti_range)
+                sigma_i[3] = perturbed(self.sigma_ti_range)
+                sigma_i[5] = perturbed(self.sigma_ti_range)
             elif self.metal_type == "molybdenum":
-                sigma_i[3] = np.mean(self.sigma_mo_range) + sigma * np.random.randn() * np.diff(self.sigma_mo_range)
-                sigma_i[5] = np.mean(self.sigma_mo_range) + sigma * np.random.randn() * np.diff(self.sigma_mo_range)
-        return sigma_i
+                sigma_i[3] = perturbed(self.sigma_mo_range)
+                sigma_i[5] = perturbed(self.sigma_mo_range)
+            return sigma_i
+        raise RuntimeError(f"Unknown cantilever_type: {self.cantilever_type!r}")
 
     # The thermal actuator power dissipation (W)
     def heaterPower(self):
@@ -2109,10 +2191,15 @@ class Cantilever:
     def heaterCurrent(self):
         return self.v_actuator / self.R_heater
 
-    # Calculate the tip deflection including all of the various effects (m)
+    # Calculate the tip deflection including all of the various effects (m).
+    # For ``cantilever_type='none'`` there is no actuator, so the
+    # actuator-driven tip deflection is zero. MATLAB raises in this case;
+    # we return 0.0 to make the metric well-defined inside the optimizer.
     def tipDeflection(self):
-        [x, z] = self.calculateDeflection()
-        return z[-1]
+        if self.cantilever_type == "none":
+            return 0.0
+        _, z = self.calculateDeflection()
+        return float(z[-1])
 
     # Calculate the tip deflection with the actuator on vs. off (m)
     # This approach cancels any static deflections (e.g. dopant bending)
@@ -2399,6 +2486,13 @@ class Cantilever:
     def lookupActuatorMechanics(self):
         E_metal, rho_metal, k_metal, alpha_metal = self.lookup_metal_properties()
 
+        if self.cantilever_type == "none":
+            # MATLAB raises here as well; the function is only meaningful
+            # for cantilevers with an actuator/step at the base.
+            raise RuntimeError(
+                "lookupActuatorMechanics() requires cantilever_type in "
+                "{'step', 'thermal', 'piezoelectric'}; got 'none'."
+            )
         if self.cantilever_type == "step" or self.cantilever_type == "thermal":
             t_layers = np.array((self.t, self.t_oxide, self.t_a))
             w_layers = np.array((self.w_a, self.w_a, self.w_a))
@@ -2410,11 +2504,13 @@ class Cantilever:
             w_layers = np.array((self.w_a, self.w_a, self.w_a, self.w_a, self.w_a, self.w_a))
             E_layers = np.array((self.modulus(), self.E_sio2, self.E_aln, E_metal, self.E_aln, E_metal))
         else:
-            raise RuntimeError("Unknown cantilever_type")
+            raise RuntimeError(f"Unknown cantilever_type: {self.cantilever_type!r}")
 
-        z_layers = np.zeros((1, t_layers.size))
-        for ii in range(1, t_layers.size + 1):
-            # z(1) = t(1)/2, z(2) = t(1) + t(2)/2
+        # z[i] is the centroid of layer i above the bottom of the stack.
+        # MATLAB used a 1-indexed row vector with an off-by-one loop; here
+        # we use a 1-D array and Python's 0-based indexing.
+        z_layers = np.zeros(t_layers.size)
+        for ii in range(t_layers.size):
             z_layers[ii] = np.sum(t_layers) - np.sum(t_layers[ii:]) + t_layers[ii] / 2
         A = w_layers * t_layers
         I = (w_layers * t_layers**3) / 12
@@ -2470,7 +2566,7 @@ class Cantilever:
         if self.cantilever_type == "none":
             omega_vacuum = omega_bernoulli
         else:
-            omega_vacuum = optimize.fminbound(self.findEnergyResidual, 1, 100 * omega_bernoulli, "xtol", 1e-6)
+            omega_vacuum = optimize.fminbound(self.findEnergyResidual, 1, 100 * omega_bernoulli, xtol=1e-6)
         return omega_vacuum
 
     # Resonant frequency for undamped vibration (first mode)
