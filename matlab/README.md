@@ -1,6 +1,8 @@
 # PiezoD MATLAB
 
-The primary implementation of PiezoD, written in object-oriented MATLAB.
+**Status: unmaintained.** This is the original MATLAB implementation, kept for historical reference. New work happens in the Python package -- see [../python/](../python/). Bug reports and feature requests for the MATLAB version will not be addressed.
+
+Object-oriented MATLAB implementation of PiezoD.
 
 ## Requirements
 

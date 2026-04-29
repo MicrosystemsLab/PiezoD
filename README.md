@@ -8,12 +8,15 @@ PiezoD is a tool for modeling the performance and optimizing the design of piezo
 
 ## Implementations
 
-| Implementation | Status | Notes |
-|----------------|--------|-------|
-| [MATLAB](matlab/) | Complete | Primary implementation, full feature set |
-| [Python](python/) | In progress | Port of MATLAB implementation |
+**Python** is the primary implementation and the only version under active development.
 
-Future development will focus on the Python version.
+```
+pip install piezod
+```
+
+See [python/README.md](python/README.md) and [python/examples/quickstart.py](python/examples/quickstart.py) to get started.
+
+**MATLAB** ([matlab/](matlab/)) is the original implementation, kept for historical reference. It is no longer maintained -- bug reports and feature requests should target the Python version.
 
 ## Features
 
@@ -40,7 +43,8 @@ Future development will focus on the Python version.
 
 ## Documentation
 
-- [Tutorial](docs/tutorial.md) - Step-by-step MATLAB guide
+- [Tutorial](docs/tutorial.md) - Step-by-step Python walkthrough
+- [MATLAB tutorial](matlab/tutorial.md) - Legacy walkthrough for the MATLAB implementation
 
 ## Contributing
 

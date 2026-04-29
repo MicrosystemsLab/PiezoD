@@ -6,7 +6,7 @@ Piezoresistor design and optimization tool.
 
 ```
 PiezoD/
-├── matlab/                      # MATLAB implementation (primary, complete)
+├── matlab/                      # MATLAB implementation (unmaintained, kept for reference)
 │   ├── PiezoD/                  # Core library
 │   │   ├── cantilever.m         # Base class
 │   │   ├── cantileverDiffusion.m
@@ -19,7 +19,7 @@ PiezoD/
 │   ├── tests/                   # MATLAB test suite (4 cantilever*Test.m files)
 │   ├── sampleCode.m             # Usage example
 │   └── README.md
-├── python/                      # Python port (in progress)
+├── python/                      # Python implementation (primary, actively developed)
 │   ├── src/piezod/              # Core library
 │   │   ├── cantilever.py        # Base class
 │   │   ├── cantilever_diffusion.py
