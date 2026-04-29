@@ -1,5 +1,7 @@
 """piezod: Modeling and optimization of piezoresistive and piezoelectric sensors."""
 
+from importlib.metadata import version
+
 from piezod.cantilever import Cantilever
 from piezod.cantilever_diffusion import CantileverDiffusion
 from piezod.cantilever_epitaxy import CantileverEpitaxy
@@ -49,4 +51,4 @@ __all__ = [
     "rotate_in_plane_stress",
 ]
 
-__version__ = "0.11.0"
+__version__ = version("piezod")

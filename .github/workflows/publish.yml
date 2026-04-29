@@ -34,11 +34,11 @@ jobs:
           echo "bare=${BARE_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Publishing version: ${TAG_VERSION} (${BARE_VERSION})"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ steps.version.outputs.tag }}
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
 
       - name: Verify version matches pyproject.toml
         run: |
