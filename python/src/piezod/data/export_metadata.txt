@@ -1,8 +1,8 @@
 DopeDealer PiezoD Export Metadata
 =================================
-Git commit: 6b4eafd17d708b0f742414d38876884fe1c33fa1
+Git commit: 66df37d198bb4fc87d5737cdf037bee28a966060
 Git branch: main
-Timestamp: 2026-04-26 20:29:15
+Timestamp: 2026-04-28 15:41:13
 Physics: FullPhysics, Solver: fbdf
 
 Grid specification:
@@ -22,29 +22,7 @@ Dual Pearson table coverage (channeling tails):
   Doses above 8e15 always use single Pearson.
 
 Results:
-  Completed: 12075/12096
-  Failures: 21
-  Total time: 41.8 min
-
-Failed cases:
-  P 5e+15 20keV 1100C 15min inert
-  P 5e+15 20keV 1100C 30min inert
-  P 5e+15 20keV 1100C 45min inert
-  P 5e+15 20keV 1100C 60min inert
-  P 5e+15 20keV 1100C 90min inert
-  P 5e+15 20keV 1100C 120min inert
-  P 5e+15 20keV 1100C 150min inert
-  As 2e+16 30keV 950C 15min dry_O2
-  As 5e+16 50keV 1100C 15min dry_O2
-  As 2e+16 30keV 950C 30min dry_O2
-  As 5e+16 50keV 1100C 30min dry_O2
-  As 2e+16 30keV 950C 45min dry_O2
-  As 5e+16 50keV 1100C 45min dry_O2
-  As 2e+16 30keV 950C 60min dry_O2
-  As 5e+16 50keV 1100C 60min dry_O2
-  As 2e+16 30keV 950C 90min dry_O2
-  As 5e+16 50keV 1100C 90min dry_O2
-  As 2e+16 30keV 950C 120min dry_O2
-  As 5e+16 50keV 1100C 120min dry_O2
-  As 2e+16 30keV 950C 150min dry_O2
-  As 5e+16 50keV 1100C 150min dry_O2
+  Completed: 12096/12096
+  Failures: 0
+  Retried with fbdf: 0
+  Total time: 57.3 min
