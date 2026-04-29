@@ -8,19 +8,14 @@ unit-scaling factor purely for fmincon's numerical conditioning: pN, nm,
 pN/sqrt(Hz), MPa. The Python factories preserve those scaling choices so
 optimizer-space objective values stay in a sensible range and so test
 expectations match the MATLAB tutorial's reported numbers.
-
-The MATLAB ``goalForceNoiseDensity`` factory is intentionally not provided
-here. Its Python counterpart depends on ``Cantilever.force_noise_density``,
-which currently calls ``voltage_noise`` with a scalar; ``voltage_noise``
-uses ``math.sqrt`` and is unable to evaluate at a single frequency
-without raising. Once that scalar/array handling is fixed in the noise
-chain, a force-noise-density goal can be added in a follow-up PR.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+
+import numpy as np
 
 # All goals share the signature ``Callable[[Cantilever], float]`` and are
 # typed as ``Callable[[Any], float]`` here because the cantilever
@@ -38,6 +33,24 @@ def force_resolution_goal() -> Goal:
 def displacement_resolution_goal() -> Goal:
     """Goal: minimum detectable displacement in nm (displacement_resolution * 1e9)."""
     return lambda c: float(c.displacement_resolution()) * 1e9
+
+
+def force_noise_density_goal() -> Goal:
+    """Goal: force noise density at the damped resonance, in pN/sqrt(Hz).
+
+    Mirrors MATLAB's ``optimize_resonant_force_noise_density``. Evaluates
+    ``Cantilever.force_noise_density`` at the damped resonance and applies
+    the MATLAB 1e12 (pN) scaling. ``force_noise_density`` returns a 2-D
+    ``(1, 1)`` array for a single frequency, so the result is squeezed to
+    a scalar.
+    """
+
+    def goal(c: Any) -> float:
+        omega_damped_hz, _ = c.omega_damped_hz_and_Q()
+        psd = c.force_noise_density(np.atleast_1d(float(omega_damped_hz)))
+        return float(np.squeeze(psd)) * 1e12
+
+    return goal
 
 
 def surface_stress_resolution_goal() -> Goal:

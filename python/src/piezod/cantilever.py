@@ -970,6 +970,7 @@ class Cantilever:
 
     # Johnson noise PSD from the entire Wheatstone bridge (V^2/Hz)
     def johnson_PSD(self, freq):
+        freq = np.atleast_1d(np.asarray(freq, dtype=float))
         resistance = self.resistance()  # resistance() includes contacts
         TPR = self.piezoresistor_temp()
         resistance *= 1 + TPR * self.TCR
@@ -1001,6 +1002,7 @@ class Cantilever:
     # Thermomechanical noise PSD
     # Units: V^2/Hz
     def thermo_PSD(self, freq):
+        freq = np.atleast_1d(np.asarray(freq, dtype=float))
         omega_damped_hz, Q_M = self.omega_damped_hz_and_Q()
         TPR = self.piezoresistor_temp()
         return (
@@ -1134,11 +1136,11 @@ class Cantilever:
             + amplifier_integrated**2
         )
 
-    # Calculate the noise at a given frequency (V/rtHz)
+    # Calculate the noise at a given frequency (V/rtHz). Accepts either a
+    # scalar or an array; the result has the same shape semantics. np.sqrt
+    # is used (not math.sqrt) so array inputs work.
     def voltage_noise(self, freq):
-        return math.sqrt(
-            self.johnson_PSD(freq) + self.hooge_PSD(freq) + self.thermo_PSD(freq) + self.amplifier_PSD(freq)
-        )
+        return np.sqrt(self.johnson_PSD(freq) + self.hooge_PSD(freq) + self.thermo_PSD(freq) + self.amplifier_PSD(freq))
 
     def f_min_cumulative(self):
         frequency = np.logspace(math.log10(self.freq_min), math.log10(self.freq_max), Cantilever.numFrequencyPoints)
@@ -1884,9 +1886,9 @@ class Cantilever:
         return self.voltage_noise(freq) / self.force_sensitivity()
 
     def resonant_force_noise_density(self):
-        [omega_damped_hz, Q] = self.omega_damped_hz_and_Q()  ##ok<*NASGU>
-        freq = omega_damped_hz
-        return self.force_noise_density(freq) * 1e15
+        omega_damped_hz, _ = self.omega_damped_hz_and_Q()
+        psd = self.force_noise_density(np.atleast_1d(float(omega_damped_hz)))
+        return float(np.squeeze(psd)) * 1e15
 
     def surface_stress_resolution(self):
         return self.integrated_noise() / self.surface_stress_sensitivity()

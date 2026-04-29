@@ -21,6 +21,7 @@ from piezod import (
     StateVar,
     charge_force_resolution_goal,
     displacement_resolution_goal,
+    force_noise_density_goal,
     force_resolution_goal,
     optimize_performance,
     optimize_performance_from_current,
@@ -320,6 +321,30 @@ class TestGoalFactories:
         c = _epitaxy_default()
         goal = surface_stress_resolution_goal()
         assert np.isclose(goal(c), c.surface_stress_resolution() * 1e6)
+
+    def test_force_noise_density_goal_returns_finite_scalar(self):
+        c = _epitaxy_default()
+        goal = force_noise_density_goal()
+        value = goal(c)
+        assert isinstance(value, float)
+        assert np.isfinite(value)
+        assert value > 0
+        # Equivalent path: resonant_force_noise_density returns fN/sqrt(Hz)
+        # and the goal returns pN/sqrt(Hz); they differ by a factor of 1e-3.
+        assert np.isclose(value, c.resonant_force_noise_density() * 1e-3)
+
+    def test_force_noise_density_goal_drives_optimization(self):
+        c = _epitaxy_default()
+        before = force_noise_density_goal()(c)
+        result = optimize_performance_from_current(
+            c,
+            force_noise_density_goal(),
+            metric_constraints=[
+                CantileverMetricConstraint(CantileverMetric.POWER_DISSIPATION, maximum=2e-3),
+            ],
+        )
+        assert np.isfinite(result.objective_value)
+        assert result.objective_value <= before
 
     def test_piezoelectric_voltage_goal(self):
         c = _piezoelectric_default()

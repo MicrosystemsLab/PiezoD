@@ -133,12 +133,13 @@ See [`python/examples/`](../python/examples/) for a runnable script for each.
 
 Design optimization is built around three pieces:
 
-- A **goal callable** that maps a cantilever to the scalar to minimize. PiezoD ships factories that match the MATLAB tutorial's units (pN, nm, etc.):
+- A **goal callable** that maps a cantilever to the scalar to minimize. PiezoD ships factories that match the MATLAB tutorial's units (pN, nm, pN/sqrt(Hz), etc.):
 
 ```python
 from piezod import (
     force_resolution_goal,
     displacement_resolution_goal,
+    force_noise_density_goal,
     surface_stress_resolution_goal,
 )
 ```
