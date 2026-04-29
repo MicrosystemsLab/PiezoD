@@ -58,7 +58,7 @@ uv run pytest
 Lint and format:
 
 ```bash
-uvx ruff check src tests --fix && uvx ruff format src tests
+uvx ruff check . --fix && uvx ruff format .
 ```
 
 Type check:

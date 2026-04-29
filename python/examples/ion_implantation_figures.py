@@ -14,8 +14,9 @@ from piezod.cantilever_implantation import _load_lookup_table
 
 plt.style.use("piezod.default")
 
-# Load bundled lookup table
-mat_data = _load_lookup_table()
+# Load bundled lookup table. _load_lookup_table now takes a source name;
+# the figures in Park 2010 were generated with the TSUPREM-4 table.
+mat_data = _load_lookup_table("tsuprem4")
 
 # Available parameter ranges from lookup table
 DOSES = mat_data["ImplantDoses"]  # [2e14, 2e15, 2e16]
