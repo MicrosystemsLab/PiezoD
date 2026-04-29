@@ -46,13 +46,14 @@ class CantileverMetric(str, Enum):
     OMEGA_VACUUM_HZ = "omega_vacuum_hz"
     OMEGA_DAMPED_HZ = "omega_damped_hz"
     STIFFNESS = "stiffness"
-    # Approximate (lumped circuit) temperature rises. The FD-based exact
-    # variants (MATLAB calculateMaxAndTipTemp) are not yet ported -- their
-    # underlying calculateTempProfile has MATLAB-style 1-indexed/sequence
-    # bugs. Use the APPROX metrics below as a temperature constraint until
-    # the FD solver is ported.
+    # Lumped-circuit (approx) and finite-difference (exact) temperature
+    # rises. APPROX is fast and good for optimization; EXACT solves the
+    # 1-D FD heat equation along the cantilever and is more accurate when
+    # the actuator contributes significant heating.
     TEMP_TIP_APPROX = "temp_tip_approx"
     TEMP_MAX_APPROX = "temp_max_approx"
+    TEMP_TIP_EXACT = "temp_tip_exact"
+    TEMP_MAX_EXACT = "temp_max_exact"
     TIP_DEFLECTION = "tip_deflection"
     SURFACE_STRESS_RESOLUTION = "surface_stress_resolution"
 
@@ -101,6 +102,12 @@ def evaluate_metric(cantilever: Any, metric: CantileverMetric) -> float:
         return float(t_max)
     if metric == CantileverMetric.TEMP_TIP_APPROX:
         _, t_tip = cantilever.approxTempRise()
+        return float(t_tip)
+    if metric == CantileverMetric.TEMP_MAX_EXACT:
+        t_max, _ = cantilever.calculateMaxAndTipTemp()
+        return float(t_max)
+    if metric == CantileverMetric.TEMP_TIP_EXACT:
+        _, t_tip = cantilever.calculateMaxAndTipTemp()
         return float(t_tip)
     if metric == CantileverMetric.TIP_DEFLECTION:
         return float(cantilever.tipDeflection())
