@@ -33,7 +33,6 @@ PiezoD/
 │   │       └── ionImplantLookupTable_dopedealer.h5
 │   ├── tests/                   # pytest suite
 │   ├── examples/                # Usage examples (quickstart.py, etc.)
-│   ├── archive/                 # Legacy/experimental scripts
 │   ├── pyproject.toml
 │   └── README.md
 ├── lookupTableGeneration/       # FLOOXS TCAD evaluation (archived, not viable

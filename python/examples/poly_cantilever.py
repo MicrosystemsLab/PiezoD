@@ -13,9 +13,9 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
-plt.style.use("piezod.default")
-
 from piezod import CantileverPoly, Material
+
+plt.style.use("piezod.default")
 
 # =============================================================================
 # Example 1: Polysilicon piezoresistor cantilever
@@ -143,8 +143,7 @@ for N in concentrations:
         dopant_concentration=N,
     )
     print(
-        f"{N:<12.0e} {c.sheet_resistance():<15.1f} "
-        f"{c.force_sensitivity():<15.0f} {c.force_resolution() * 1e12:<15.1f}"
+        f"{N:<12.0e} {c.sheet_resistance():<15.1f} {c.force_sensitivity():<15.0f} {c.force_resolution() * 1e12:<15.1f}"
     )
 print()
 

@@ -17,9 +17,9 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
-plt.style.use("piezod.default")
-
 from piezod import CantileverDiffusion, CantileverEpitaxy
+
+plt.style.use("piezod.default")
 
 # Cantilever geometry - typical MEMS force sensor
 L = 200e-6  # length: 200 um
@@ -127,7 +127,7 @@ k = c_diff.stiffness()
 print(f"{'Stiffness (N/m)':<30} {k:>15.3f} {c_epi.stiffness():>15.3f}")
 
 f0 = c_diff.omega_vacuum_hz()
-print(f"{'Resonant freq (kHz)':<30} {f0/1e3:>15.1f} {c_epi.omega_vacuum_hz()/1e3:>15.1f}")
+print(f"{'Resonant freq (kHz)':<30} {f0 / 1e3:>15.1f} {c_epi.omega_vacuum_hz() / 1e3:>15.1f}")
 
 beta_diff = c_diff.beta()
 beta_epi = c_epi.beta()
@@ -155,7 +155,7 @@ ax1.semilogy(z_diff * 1e9, np.maximum(active_diff, 1.0), "b--", label="Net activ
 ax1.axvline(x=c_diff.junction_depth * 1e9, color="green", linestyle="--", label="Junction")
 ax1.set_xlabel("Depth (nm)")
 ax1.set_ylabel("Concentration (cm$^{-3}$)")
-ax1.set_title(f"POCl3 Diffusion Profile\n({DIFFUSION_TEMP-273.15:.0f}C, {DIFFUSION_TIME/60:.0f} min)")
+ax1.set_title(f"POCl3 Diffusion Profile\n({DIFFUSION_TEMP - 273.15:.0f}C, {DIFFUSION_TIME / 60:.0f} min)")
 ax1.legend()
 ax1.set_ylim([1e14, 1e22])
 
@@ -181,7 +181,7 @@ fig2, ax3 = plt.subplots(figsize=(8, 5))
 temps = [800, 850, 900, 950, 1000]  # Celsius
 colors = plt.cm.hot(np.linspace(0.3, 0.8, len(temps)))
 
-for temp_c, color in zip(temps, colors):
+for temp_c, color in zip(temps, colors, strict=True):
     c_temp = CantileverDiffusion(
         freq_min=FREQ_MIN,
         freq_max=FREQ_MAX,

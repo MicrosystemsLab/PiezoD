@@ -17,9 +17,9 @@ import addcopyfighandler  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
 
-plt.style.use("piezod.default")
-
 from piezod import CantileverPiezoelectric, FluidType, PiezoMaterial
+
+plt.style.use("piezod.default")
 
 # =============================================================================
 # Example 1: AlN piezoelectric cantilever
