@@ -131,7 +131,59 @@ See [`python/examples/`](../python/examples/) for a runnable script for each.
 
 ## Optimization
 
-Design optimization (resolution / noise PSD goal functions with parameter and nonlinear constraints) is implemented in the MATLAB version but has not yet been ported to Python. Track [GitHub Issues](https://github.com/MicrosystemsLab/PiezoD/issues) for progress, or use the MATLAB implementation when optimization is required.
+Design optimization is built around three pieces:
+
+- A **goal callable** that maps a cantilever to the scalar to minimize. PiezoD ships factories that match the MATLAB tutorial's units (pN, nm, pN/sqrt(Hz), etc.):
+
+```python
+from piezod import (
+    force_resolution_goal,
+    displacement_resolution_goal,
+    force_noise_density_goal,
+    surface_stress_resolution_goal,
+)
+```
+
+- Optional **parameter_constraints** that override the default state-variable bounds (e.g. clamp thickness, cap bias voltage). Keys are `min_<name>` / `max_<name>` for any state variable returned by `c.optimization_state_vars()`.
+
+- Optional **metric_constraints** -- inequality constraints on derived quantities like power dissipation, resonant frequency, or stiffness. Each constraint is a `CantileverMetricConstraint` referencing a `CantileverMetric` enum value.
+
+```python
+from piezod import (
+    CantileverMetric,
+    CantileverMetricConstraint,
+    optimize_performance,
+)
+
+constraints = [
+    CantileverMetricConstraint(CantileverMetric.POWER_DISSIPATION, maximum=2e-3),
+    CantileverMetricConstraint(CantileverMetric.OMEGA_VACUUM_HZ, minimum=5 * c.freq_max),
+    CantileverMetricConstraint(CantileverMetric.STIFFNESS, minimum=1e-3, maximum=1e1),
+]
+
+result = optimize_performance(
+    c,
+    force_resolution_goal(),
+    parameter_constraints={"max_v_bridge": 10.0},
+    metric_constraints=constraints,
+    n_starts=5,
+    max_iterations=10,
+    random_seed=0,
+)
+```
+
+`optimize_performance` runs SciPy's SLSQP (or L-BFGS-B when there are no nonlinear constraints) from random initial conditions and returns the best result once two starts agree within `convergence_tolerance` (1% by default), capped at `max_iterations` total runs. Use `optimize_performance_from_current` for a single-shot refinement of the existing design.
+
+```python
+print(f"force_resolution: {c.force_resolution() * 1e12:.1f} pN -> "
+      f"{result.optimized.force_resolution() * 1e12:.2f} pN")
+```
+
+Default geometric sanity constraints (`l/w >= 2`, `w/t >= 2`, `l_pr/w_pr >= 2`, `l_pr >= 2 um`) are added automatically; pass `default_aspect_constraints=False` to opt out.
+
+For a runnable end-to-end example with full output, see [`python/examples/optimization.py`](../python/examples/optimization.py). The example mirrors the MATLAB tutorial flow and typically improves Harley-1999-style force resolution by several hundred times.
+
+For implant-process-only optimization (geometry fixed, only `annealing_time/temp` and `implantation_energy/dose` varied), `CantileverImplantation.optimize_doping_for_hooge_noise` is also available with a Hooge-noise-limited default objective.
 
 ## Next Steps
 

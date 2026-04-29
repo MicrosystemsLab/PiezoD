@@ -20,6 +20,22 @@ from piezod.cantilever_piezoelectric import (
     PiezoMaterial,
 )
 from piezod.cantilever_poly import CantileverPoly, Material
+from piezod.optimization import (
+    CantileverMetric,
+    CantileverMetricConstraint,
+    OptimizationResult,
+    StateVar,
+    charge_displacement_resolution_goal,
+    charge_force_resolution_goal,
+    displacement_resolution_goal,
+    force_noise_density_goal,
+    force_resolution_goal,
+    optimize_performance,
+    optimize_performance_from_current,
+    surface_stress_resolution_goal,
+    voltage_displacement_resolution_goal,
+    voltage_force_resolution_goal,
+)
 from piezod.piezoresistance import (
     CrystalOrientation,
     default_orientation,
@@ -33,6 +49,8 @@ __all__ = [
     "CantileverDiffusion",
     "CantileverEpitaxy",
     "CantileverImplantation",
+    "CantileverMetric",
+    "CantileverMetricConstraint",
     "CantileverPiezoelectric",
     "CantileverPoly",
     "CrystalOrientation",
@@ -42,13 +60,25 @@ __all__ = [
     "FluidType",
     "Material",
     "MetricConstraint",
+    "OptimizationResult",
     "PiezoMaterial",
     "PiezoresistorFromProfile",
+    "StateVar",
+    "charge_displacement_resolution_goal",
+    "charge_force_resolution_goal",
     "default_orientation",
     "diffusion_length_cm",
+    "displacement_resolution_goal",
+    "force_noise_density_goal",
+    "force_resolution_goal",
     "hooge_alpha_from_anneal",
+    "optimize_performance",
+    "optimize_performance_from_current",
     "pi_low_doping",
     "rotate_in_plane_stress",
+    "surface_stress_resolution_goal",
+    "voltage_displacement_resolution_goal",
+    "voltage_force_resolution_goal",
 ]
 
 __version__ = version("piezod")

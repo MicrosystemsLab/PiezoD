@@ -13,6 +13,8 @@ from numpy.typing import NDArray
 from scipy.interpolate import RegularGridInterpolator
 from scipy.optimize import minimize_scalar
 
+from piezod.optimization.state import StateVar
+
 
 class PiezoMaterial(Enum):
     """Piezoelectric material options."""
@@ -520,3 +522,35 @@ class CantileverPiezoelectric:
         freq = self.freq_for_plot()
         Qn = self.Qn(freq)
         return float(np.sqrt(np.trapezoid(Qn**2, freq)))
+
+    def optimization_post_apply(self) -> None:
+        """Mirror silicon length/width onto the piezoelectric layer.
+
+        MATLAB ``cantileverPiezoelectric.cantilever_from_state`` performs
+        the same coupling. Methods like ``stiffness`` and ``tipDeflection``
+        read ``l_pe``/``w_pe``, so they must track ``l_si``/``w_si``.
+        """
+        self.l_pe = self.l_si
+        self.w_pe = self.w_si
+
+    def optimization_state_vars(self) -> tuple[StateVar, ...]:
+        """Declarative state spec for piezoelectric cantilever optimization.
+
+        Five state variables: silicon length, width, thickness,
+        piezoelectric layer thickness, and shunt resistance. Default
+        bounds match MATLAB ``cantileverPiezoelectric``. The piezoelectric
+        layer geometry tracks the silicon length/width and is not
+        independently optimized. Material choice and fluid environment are
+        also not optimized.
+
+        Note: MATLAB's default pins ``r_shunt`` at 1e12 (min == max). To
+        actually vary it, pass ``parameter_constraints={"min_r_shunt": ...,
+        "max_r_shunt": ...}``.
+        """
+        return (
+            StateVar("l_si", 1e6, 10e-6, 10e-3),
+            StateVar("w_si", 1e6, 1e-6, 500e-6),
+            StateVar("t_si", 1e9, 1e-6, 10e-6),
+            StateVar("t_pe", 1e9, 200e-9, 1e-6),
+            StateVar("r_shunt", 1e-9, 1e12, 1e12),
+        )

@@ -13,6 +13,8 @@ from enum import Enum
 import numpy as np
 from numpy.typing import NDArray
 
+from piezod.optimization.state import StateVar
+
 
 class Material(Enum):
     """Material types for cantilever layers."""
@@ -598,3 +600,35 @@ class CantileverPoly:
         print(f"Number of carriers: {self.number_of_carriers():.3g}")
         print(f"Stiffness: {self.stiffness():.3g} N/m")
         print(f"Resonant frequency: {self.resonant_frequency():.1f} Hz")
+
+    def optimization_post_apply(self) -> None:
+        """Enforce top/bottom thickness symmetry for two-piezoresistor layouts.
+
+        ``CantileverPoly.__init__`` forces ``t_bot = t_top`` whenever
+        ``number_of_piezoresistors_on_cantilever == 2``. The same constraint
+        must be re-applied during optimization, otherwise the optimizer
+        could find an asymmetric design that violates the configured
+        layout.
+        """
+        if self.number_of_piezoresistors_on_cantilever == 2:
+            self.t_bot = self.t_top
+
+    def optimization_state_vars(self) -> tuple[StateVar, ...]:
+        """Declarative state spec for joint geometry + multi-layer optimization.
+
+        Eight state variables: cantilever length, width, piezoresistor
+        length ratio, bridge bias voltage, top/mid/bottom layer
+        thicknesses, and dopant concentration (log-scale). Default bounds
+        match MATLAB ``cantileverPoly``. Layer materials and the
+        ``number_of_piezoresistors`` settings are not optimized.
+        """
+        return (
+            StateVar("l", 1e6, 20e-6, 1e-3),
+            StateVar("w", 1e6, 5e-6, 100e-6),
+            StateVar("l_pr_ratio", 1.0, 0.01, 1.0),
+            StateVar("v_bridge", 1.0, 0.1, 10.0),
+            StateVar("t_top", 1e9, 50e-9, 2e-6),
+            StateVar("t_mid", 1e9, 10e-9, 2e-6),
+            StateVar("t_bot", 1e9, 50e-9, 2e-6),
+            StateVar("dopant_concentration", 1.0, 1e17, 1e20, log_scale=True),
+        )
