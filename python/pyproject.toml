@@ -7,7 +7,7 @@ name = "piezod"
 version = "0.11.0"
 description = "Modeling and optimization of piezoresistive and piezoelectric sensors and actuators"
 readme = "README.md"
-license = "GPL-3.0-or-later"
+license = "Apache-2.0"
 authors = [
     { name = "Joseph C. Doll" }
 ]
@@ -15,7 +15,7 @@ keywords = ["MEMS", "piezoresistive", "piezoelectric", "cantilever", "sensor", "
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",

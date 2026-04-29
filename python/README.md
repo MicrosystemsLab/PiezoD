@@ -104,4 +104,4 @@ If you use piezod in your research, please cite:
 
 ## License
 
-GPL-3.0-or-later
+Apache-2.0
