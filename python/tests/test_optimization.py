@@ -622,6 +622,62 @@ class TestCustomObjective:
 # -----------------------------------------------------------------------------
 
 
+class TestNoiseChainAndPrintPerformance:
+    """Coverage for the cantilever methods that were broken pre-PR."""
+
+    def test_voltage_noise_accepts_scalar_and_array(self):
+        c = _epitaxy_default()
+        # Scalar input was broken by johnson_PSD's freq.size pattern
+        scalar_value = float(np.squeeze(c.voltage_noise(1e3)))
+        assert np.isfinite(scalar_value) and scalar_value > 0
+        # Array input was broken by math.sqrt
+        array_values = np.squeeze(c.voltage_noise(np.logspace(1, 3, 5)))
+        assert array_values.shape == (5,)
+        assert np.all(np.isfinite(array_values))
+
+    def test_resonant_force_noise_density_returns_scalar(self):
+        c = _epitaxy_default()
+        value = c.resonant_force_noise_density()
+        assert isinstance(value, float)
+        assert np.isfinite(value) and value > 0
+
+    def test_k_base_returns_scalar(self):
+        c = _epitaxy_default()
+        value = c.k_base()
+        assert isinstance(value, float)
+        assert value > 0
+
+    def test_approx_temp_rise_returns_finite(self):
+        c = _epitaxy_default()
+        t_max, t_tip = c.approxTempRise()
+        assert np.isfinite(t_max) and np.isfinite(t_tip)
+        assert t_max >= 0 and t_tip >= 0
+
+    def test_print_performance_runs_end_to_end(self, capsys):
+        c = _epitaxy_default()
+        c.print_performance()
+        captured = capsys.readouterr()
+        # Spot-check that key sections rendered
+        assert "Force resolution" in captured.out
+        assert "Force noise at 1 kHz" in captured.out
+        assert "Approx. Temp Rises" in captured.out
+
+    def test_temp_max_approx_constraint_works(self):
+        c = _epitaxy_default()
+        result = optimize_performance_from_current(
+            c,
+            force_resolution_goal(),
+            metric_constraints=[
+                CantileverMetricConstraint(CantileverMetric.POWER_DISSIPATION, maximum=2e-3),
+                CantileverMetricConstraint(CantileverMetric.TEMP_MAX_APPROX, maximum=20.0),
+            ],
+        )
+        # The constraint should bound the optimized cantilever's max temp rise.
+        # SLSQP can violate by ~1% of scale.
+        t_max, _ = result.optimized.approxTempRise()
+        assert t_max <= 20.0 * 1.05
+
+
 def test_original_cantilever_not_mutated():
     c = _epitaxy_default()
     state_vars = c.optimization_state_vars()

@@ -758,7 +758,9 @@ class Cantilever:
         omega_damped_hz, Q = self.omega_damped_hz_and_Q()
         x, active_doping, total_doping = self.doping_profile()
         TMax_approx, TTip_approx = self.approxTempRise()
-        TMax, TTip = self.calculateMaxAndTipTemp()
+        # NOTE: the FD temperature solver (calculateMaxAndTipTemp /
+        # calculateTempProfile) has unported MATLAB-isms that raise on the
+        # default cantilever_type. Skip the F-D line until that is ported.
         thermoLimit = self.thermo_integrated() / self.force_sensitivity()
 
         print("=======================")
@@ -769,7 +771,9 @@ class Cantilever:
         print(f"PR Length Ratio: {self.l_pr_ratio:g}")
 
         print(f"Force resolution (N): {self.force_resolution():g}")
-        print(f"Force noise at 1 kHz (fN): {self.force_noise_density(1e3):g}")
+        # force_noise_density returns a (1,1) array even for a scalar
+        # frequency input; squeeze to a Python float for the format spec.
+        print(f"Force noise at 1 kHz (fN): {float(np.squeeze(self.force_noise_density(1e3))) * 1e15:g}")
         print(f"Displacement resolution (m): {self.displacement_resolution():g}")
         print(f"Force sensitivity (V/N): {self.force_sensitivity():g}")
         print(f"Displacement sensitivity (V/m): {self.displacement_sensitivity():g}")
@@ -786,7 +790,6 @@ class Cantilever:
         print(f"Sheet Resistance: {self.sheet_resistance()}")
         print(f"Power dissipation (mW): {self.power_dissipation() * 1e3:g}")
         print(f"Approx. Temp Rises (C) - Tip: {TTip_approx}  Max: {TMax_approx}")
-        print(f"F-D Temp Rises (C)     - Tip: {TTip}  Max: {TMax}")
 
         print(f"Integrated noise (V): {self.integrated_noise():g}")
         print(f"Integrated johnson noise (V): {self.johnson_integrated():g}")
@@ -802,7 +805,7 @@ class Cantilever:
         print(f"Number of silicon resistors: {self.number_of_piezoresistors}")
         print(f"Si Thermal Conductivity (W/m-K): {self.k_base()}")
         print(f"E (GPa): {self.modulus() * 1e-9}")
-        print(f"Alpha: {self.alpha:g}")
+        print(f"Alpha: {self.alpha():g}")
 
         if self.cantilever_type == "step":
             print("=======================")
@@ -1749,10 +1752,12 @@ class Cantilever:
         T_final = T_current
         return x, Q, T_final
 
-    # Calculate the approximate thermal conductivity of the cantilever (W/m-K)
+    # Calculate the approximate thermal conductivity of the cantilever (W/m-K).
+    # k_x() already returns the scalar effective conductivity; the legacy
+    # ``k_x[0]`` indexing was a MATLAB-port leftover and raised on the float
+    # returned by the "approx" branch.
     def k_base(self):
-        k_x = self.k_x()
-        return k_x[0]
+        return self.k_x()
 
     # Calculate k(x) as a function of cantilever thickness
     # None/approx = Asheghi (1997) model
@@ -2294,11 +2299,14 @@ class Cantilever:
         freq = np.logspace(math.log10(self.freq_min), math.log10(self.freq_max), Cantilever.numFrequencyPoints)
 
         plt.figure()
-        plt.plot(freq, math.sqrt(self.johnson_PSD(freq)))
-        plt.plot(freq, math.sqrt(self.hooge_PSD(freq)))
-        plt.plot(freq, math.sqrt(self.thermo_PSD(freq)))
-        plt.plot(freq, math.sqrt(self.amplifier_PSD(freq)))
-        plt.plot(freq, self.voltage_noise(freq))
+        # np.sqrt (not math.sqrt) so each PSD array is rooted element-wise.
+        # Squeeze converts the (1, N) shape returned by johnson_PSD/thermo_PSD
+        # into (N,) so matplotlib gets matched 1-D x and y.
+        plt.plot(freq, np.squeeze(np.sqrt(self.johnson_PSD(freq))))
+        plt.plot(freq, np.squeeze(np.sqrt(self.hooge_PSD(freq))))
+        plt.plot(freq, np.squeeze(np.sqrt(self.thermo_PSD(freq))))
+        plt.plot(freq, np.squeeze(np.sqrt(self.amplifier_PSD(freq))))
+        plt.plot(freq, np.squeeze(self.voltage_noise(freq)))
         plt.gca().set_xscale("log")
         plt.gca().set_yscale("log")
         plt.ylabel("Noise Voltage Spectral Density (V/rtHz)")
