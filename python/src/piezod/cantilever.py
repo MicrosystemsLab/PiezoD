@@ -644,10 +644,7 @@ class Cantilever:
 
         last_base_idx = int(np.where(base_mask)[0][-1])
         x_relative = x[tip_mask] - x[last_base_idx]
-        if last_base_idx > 0:
-            tip_slope = (deflection[last_base_idx] - deflection[last_base_idx - 1]) / dx
-        else:
-            tip_slope = 0.0
+        tip_slope = (deflection[last_base_idx] - deflection[last_base_idx - 1]) / dx if last_base_idx > 0 else 0.0
         deflection[tip_mask] = (
             deflection[last_base_idx]
             - F * x_relative**2 * (3 * self.l - x_relative) / (6 * EI_tip)
