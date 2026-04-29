@@ -11,6 +11,16 @@ import numpy as np
 from numpy.typing import NDArray
 
 from piezod.cantilever import Cantilever
+from piezod.optimization.state import StateVar
+
+# Solid-solubility approximations at 1000C used as upper bounds for the
+# dopant concentration during optimization. Mirrors MATLAB
+# cantileverEpitaxy.doping_optimization_bounds.
+_MAX_DOPANT_CONCENTRATION_BY_TYPE: dict[str, float] = {
+    "boron": 2e20,
+    "phosphorus": 4e20,
+    "arsenic": 8e20,
+}
 
 
 class CantileverEpitaxy(Cantilever):
@@ -245,3 +255,24 @@ class CantileverEpitaxy(Cantilever):
         x0 = np.array([dopant_concentration_random, t_pr_ratio_random])
 
         return x0
+
+    def optimization_state_vars(self) -> tuple[StateVar, ...]:
+        """Declarative state spec for joint geometry + epitaxial optimization.
+
+        Returns the seven optimizable state variables: cantilever length,
+        width, thickness, piezoresistor length ratio, bridge bias voltage,
+        epitaxial dopant concentration (log-scale), and piezoresistor
+        thickness ratio. Default bounds match MATLAB ``cantileverEpitaxy``;
+        the dopant-concentration upper bound is solid-solubility-based and
+        depends on ``self.doping_type``.
+        """
+        max_concentration = _MAX_DOPANT_CONCENTRATION_BY_TYPE.get(self.doping_type, 1e20)
+        return (
+            StateVar("l", 1e5, 10e-6, 3e-3),
+            StateVar("w", 1e7, 2e-6, 100e-6),
+            StateVar("t", 1e8, 1e-6, 100e-6),
+            StateVar("l_pr_ratio", 1e2, 0.01, 0.99),
+            StateVar("v_bridge", 1e1, 0.1, 10.0),
+            StateVar("dopant_concentration", 1.0, 1e17, max_concentration, log_scale=True),
+            StateVar("t_pr_ratio", 10.0, 0.01, 0.99),
+        )

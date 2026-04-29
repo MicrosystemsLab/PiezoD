@@ -42,6 +42,7 @@ from scipy.interpolate import interpn
 from scipy.optimize import OptimizeResult, minimize
 
 from piezod.cantilever import Cantilever
+from piezod.optimization.state import StateVar
 
 # Module-level cache for lookup table data, keyed by source name
 _LOOKUP_TABLE_CACHE: dict[str, dict] = {}
@@ -938,6 +939,50 @@ class CantileverImplantation(Cantilever):
         """
         lb, ub = self.doping_optimization_bounds(parameter_constraints)
         return lb + np.random.rand(4) * (ub - lb)
+
+    def optimization_state_vars(self) -> tuple[StateVar, ...]:
+        """Declarative state spec for joint geometry + implant optimization.
+
+        Nine state variables: cantilever length, width, thickness,
+        piezoresistor length ratio, bridge bias voltage, annealing time,
+        annealing temperature, implant energy, and implant dose
+        (log-scale). Default doping bounds come from
+        ``_DEFAULT_BOUNDS[self.lookup_source]`` so the bounds match
+        whichever lookup table the cantilever was constructed with.
+        """
+        bounds = _DEFAULT_BOUNDS[self.lookup_source]
+        return (
+            StateVar("l", 1e5, 10e-6, 3e-3),
+            StateVar("w", 1e7, 2e-6, 100e-6),
+            StateVar("t", 1e8, 1e-6, 100e-6),
+            StateVar("l_pr_ratio", 1e2, 0.01, 0.99),
+            StateVar("v_bridge", 1e1, 0.1, 10.0),
+            StateVar(
+                "annealing_time",
+                1e-2,
+                bounds["min_annealing_time"],
+                bounds["max_annealing_time"],
+            ),
+            StateVar(
+                "annealing_temp",
+                1e-2,
+                bounds["min_annealing_temp"],
+                bounds["max_annealing_temp"],
+            ),
+            StateVar(
+                "implantation_energy",
+                1.0,
+                bounds["min_implantation_energy"],
+                bounds["max_implantation_energy"],
+            ),
+            StateVar(
+                "implantation_dose",
+                1.0,
+                bounds["min_implantation_dose"],
+                bounds["max_implantation_dose"],
+                log_scale=True,
+            ),
+        )
 
     def optimize_doping_for_hooge_noise(
         self,

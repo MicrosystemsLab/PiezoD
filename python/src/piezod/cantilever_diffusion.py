@@ -17,6 +17,7 @@ import numpy.typing as npt
 from scipy.special import erfc
 
 from piezod.cantilever import Cantilever
+from piezod.optimization.state import StateVar
 
 
 class CantileverDiffusion(Cantilever):
@@ -340,3 +341,21 @@ class CantileverDiffusion(Cantilever):
         diffusion_temp_random = diffusion_temp_min + np.random.rand() * (diffusion_temp_max - diffusion_temp_min)
 
         return [diffusion_time_random, diffusion_temp_random]
+
+    def optimization_state_vars(self) -> tuple[StateVar, ...]:
+        """Declarative state spec for joint geometry + diffusion optimization.
+
+        Seven state variables: cantilever length, width, thickness,
+        piezoresistor length ratio, bridge bias voltage, diffusion time,
+        and diffusion temperature. Default bounds match MATLAB
+        ``cantileverDiffusion``.
+        """
+        return (
+            StateVar("l", 1e5, 10e-6, 3e-3),
+            StateVar("w", 1e7, 2e-6, 100e-6),
+            StateVar("t", 1e8, 1e-6, 100e-6),
+            StateVar("l_pr_ratio", 1e2, 0.01, 0.99),
+            StateVar("v_bridge", 1e1, 0.1, 10.0),
+            StateVar("diffusion_time", 1e-3, 5 * 60, 90 * 60),
+            StateVar("diffusion_temp", 1e-3, 273 + 800, 273 + 1000),
+        )
