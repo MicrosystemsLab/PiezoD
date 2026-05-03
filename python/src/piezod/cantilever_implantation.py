@@ -12,7 +12,7 @@ Two lookup table sources are supported:
 - "dopedealer": DopeDealer lookup table (ionImplantLookupTable_dopedealer.h5)
   - Dopants: B, P, As
   - Anneal types: "inert" (1), "dry_o2" (2)
-  - Energy: 10-120 keV, Dose: 1e13-5e16 cm^-2
+  - Energy: 10-120 keV, Dose: 1e12-5e16 cm^-2
   - Temperature: 900-1100C, Time: 15-150 min
 
 For all conditions, a 250A protection oxide layer is grown before the ion
@@ -72,7 +72,7 @@ _DEFAULT_BOUNDS: dict[str, dict[str, float]] = {
         "max_annealing_temp": 273.15 + 1100,
         "min_implantation_energy": 10,
         "max_implantation_energy": 120,
-        "min_implantation_dose": 1e13,
+        "min_implantation_dose": 1e12,
         "max_implantation_dose": 5e16,
     },
 }
