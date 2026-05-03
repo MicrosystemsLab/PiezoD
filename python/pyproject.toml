@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "piezod"
-version = "0.13.1"
+version = "0.13.2"
 description = "Modeling and optimization of piezoresistive and piezoelectric sensors and actuators"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
